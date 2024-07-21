@@ -1,0 +1,13 @@
+set_tx_default_profile:
+  description: "Set the maximum current for an ongoing or future transaction."
+  fields:
+    max_current:
+      description: "The maximum current to set in amperes."
+      example: 16
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 32
+          step: 1
+          unit_of_measurement: "A"
