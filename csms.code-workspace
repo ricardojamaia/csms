@@ -1,0 +1,14 @@
+{
+  "folders": [
+	{
+		"path": "../homeassistant-core"
+	},
+	{
+		"path": "../ocpp"
+	},
+	{
+		"path": "."
+	}
+],
+  "settings": {}
+}
