@@ -1,19 +1,41 @@
-set_tx_default_profile:
-  description: "Set the maximum current for an ongoing or future transaction."
+get_charging_profiles:
   fields:
     charging_station:
-      description: "The ID of the charging station."
-      example: "DE*BMW*EDAKG8468367490WE"
       required: true
       selector:
         text:
-    max_current:
-      description: "The maximum current to set in amperes."
-      example: 16
+    profile_purpose:
       required: true
       selector:
-        number:
-          min: 0
-          max: 32
-          step: 1
-          unit_of_measurement: "A"
+        select:
+          translation_key: "profile_purpose_type"
+          options:
+            - "tx_default_profile"
+            - "tx_profile"
+
+set_charging_profile:
+  fields:
+    charging_station:
+      required: true
+      selector:
+        text:
+    charging_profile:
+      required: true
+      selector:
+        object:
+
+clear_charging_profiles:
+  fields:
+    charging_station:
+      example: DE*BMW*EDAKG8468367490WE
+      required: true
+      selector:
+        text:
+    profile_purpose:
+      required: true
+      selector:
+        select:
+          translation_key: "profile_purpose_type"
+          options:
+            - "tx_default_profile"
+            - "tx_profile"

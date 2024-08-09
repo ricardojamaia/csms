@@ -1,0 +1,7 @@
+{
+  "services": {
+    "get_charging_profiles": "mdi:ev-station",
+    "set_charging_profile": "mdi:ev-station",
+    "clear_charging_profiles": "mdi:close-circle"
+  }
+}

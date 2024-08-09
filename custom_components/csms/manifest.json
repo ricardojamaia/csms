@@ -14,5 +14,6 @@
   ],
   "ssdp": [],
   "zeroconf": [],
+  "translations": true,
   "version": "0.0.1"
 }

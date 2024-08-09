@@ -1,22 +1,68 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured"
-        },
-        "error": {
-            "invalid_auth": "Invalid authentication",
-            "invalid_port": "Invalid port. Please specify an unused port between 1 and 65535",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "host": "Host",
-                    "password": "Password",
-                    "port": "OCPP Server Port",
-                    "username": "Username"
-                }
-            }
-        }
+  "selector": {
+    "profile_purpose_type": {
+      "options": {
+        "tx_default_profile": "TX Default Profiles",
+        "tx_profile": "TX Profile"
+      }
     }
+  },
+  "services": {
+    "get_charging_profiles": {
+      "name": "Get charging profiles",
+      "description": "Get charging profiles installed on the charging station.",
+      "fields": {
+        "charging_station": {
+          "name": "Charging station ID",
+          "description": "The ID of the charging station."
+        },
+        "profile_purpose": {
+          "name": "Profile purpose",
+          "description": "Purpose of the profiles to delete."
+        }
+      }
+    },
+    "set_charging_profile": {
+      "name": "Set a charging profile",
+      "description": "Set the charging profile for ongoing or future transaction.",
+      "fields": {
+        "charging_station": {
+          "name": "Charging station ID",
+          "description": "The ID of the charging station."
+        },
+        "charging_profile": {
+          "name": "Charging profile",
+          "description": "JSON charging profile according to OCPP 2.0.1."
+        }
+      }
+    },
+    "clear_charging_profiles": {
+      "name": "Clear charging profiles",
+      "description": "Clear charging profiles from the charging station.",
+      "fields": {
+        "charging_station": {
+          "name": "Charging station ID",
+          "description": "The ID of the charging station."
+        },
+        "profile_purpose": {
+          "name": "Profile purpose",
+          "description": "Purpose of the profiles to delete."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "unrecognised_charging_station": {
+      "message": "Unrecognized charging station: {charging_station}. Check configuration.yaml for valid charging station IDs."
+    },
+    "not_connected": {
+      "message": "Charging station: {charging_station} not connected."
+    },
+    "request_error": {
+      "message": "Error sending request to charging station: {log_message}"
+    },
+    "invalid_profile_purpose": {
+      "message": "Invalid charging profile purpose: {profile_purpose}"
+    }
+  }
 }

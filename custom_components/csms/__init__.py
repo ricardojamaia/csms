@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
+from ocpp.exceptions import FormatViolationError, ProtocolError
+from ocpp.v201.enums import ChargingProfilePurposeType
 import voluptuous as vol
 
 from homeassistant.const import CONF_PORT, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
+from .const import DOMAIN, _LOGGER
 from .csms import ChargingStationManagementSystem, ChargingStationManager
-
 
 csms = ChargingStationManagementSystem()
 ha: HomeAssistant
@@ -45,8 +48,16 @@ CHARGING_STATION_SCHEMA = vol.Schema(
                             vol.Required("id"): cv.positive_int,
                             vol.Required("connector_id"): cv.positive_int,
                         },
+                        vol.Optional("instance"): cv.string,
                     },
-                    vol.Required("variable"): {vol.Required("name"): cv.string},
+                    vol.Required("variable"): {
+                        vol.Required("name"): cv.string,
+                        vol.Optional("instance"): cv.string,
+                    },
+                    vol.Required("monitoring"): {
+                        vol.Required("type"): cv.string,
+                        vol.Required("value"): cv.positive_float,
+                    },
                 }
             ],
         ),
@@ -104,22 +115,150 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+GET_CHARGING_PROFILES_SCHEMA = vol.Schema(
+    {
+        vol.Required("charging_station"): cv.string,  # Charging station ID
+        vol.Required("profile_purpose"): vol.In(
+            ["tx_default_profile", "tx_profile"]
+        ),  # Profile types
+    }
+)
+
+SET_CHARGING_PROFILE_SCHEMA = vol.Schema(
+    {
+        vol.Required("charging_station"): cv.string,  # Charging station ID
+        vol.Required("charging_profile"): dict,  # JSON object with the charging profile
+    }
+)
+
+CLEAR_CHARGING_PROFILES_SCHEMA = vol.Schema(
+    {
+        vol.Required("charging_station"): cv.string,  # Charging station ID
+        vol.Required("profile_purpose"): vol.In(
+            ["tx_default_profile", "tx_profile"]
+        ),  # Profile types
+    }
+)
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration from YAML."""
 
-    async def handle_set_tx_default_profile(call: ServiceCall):
-        max_current = call.data.get("max_current")
+    _LOGGER.debug("Starting CSMS setup.")
+
+    async def handle_get_charging_profiles(call: ServiceCall):
+        profile_purpose = call.data.get("profile_purpose")
+        charging_station = call.data.get("charging_station")
+
+        # Get the ChargingStationManager instance
+        cs_manager = csms.cs_managers.get(charging_station)
+
+        purpose_type = get_profile_purpose_type(profile_purpose)
+
+        # Retrieve the charging profiles
+        profiles = {}
+        if cs_manager is not None:
+            if not cs_manager.is_connected():
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_connected",
+                    translation_placeholders={
+                        "charging_station": charging_station,
+                    },
+                )
+            profiles = {
+                "charging_profiles": await cs_manager.get_charging_profiles(
+                    purpose_type
+                )
+            }
+        else:
+            logging.error("Unrecognized charging station.")
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unrecognised_charging_station",
+                translation_placeholders={
+                    "charging_station": charging_station,
+                },
+            )
+
+        return profiles
+
+    async def handle_set_charging_profile(call: ServiceCall):
+        charging_profile = call.data.get("charging_profile")
         charging_station = call.data.get("charging_station")
 
         # # Get the ChargingStationManager instance
         cs_manager = csms.cs_managers.get(charging_station)
 
-        # # Set the maximum current for the charging station using smart charging features
+        # # Set the charging profile
         if cs_manager is not None:
-            await cs_manager.set_tx_default_profile(max_current)
+            if not cs_manager.is_connected():
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_connected",
+                    translation_placeholders={
+                        "charging_station": charging_station,
+                    },
+                )
+            try:
+                await cs_manager.set_charging_profile(charging_profile)
+            except Exception as e:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="request_error",
+                    translation_placeholders={
+                        "log_message": str(e),
+                    },
+                ) from e
         else:
             logging.error("Unrecognized charging station.")
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unrecognised_charging_station",
+                translation_placeholders={
+                    "charging_station": charging_station,
+                },
+            )
+
+    async def handle_clear_charging_profiles(call: ServiceCall):
+        profile_purpose = call.data.get("profile_purpose")
+        charging_station = call.data.get("charging_station")
+
+        # # Get the ChargingStationManager instance
+        cs_manager = csms.cs_managers.get(charging_station)
+
+        purpose_type = get_profile_purpose_type(profile_purpose)
+
+        # # Set the maximum current for the charging station using smart charging features
+        if cs_manager is not None:
+            if not cs_manager.is_connected():
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_connected",
+                    translation_placeholders={
+                        "charging_station": charging_station,
+                    },
+                )
+            await cs_manager.clear_charging_profile(
+                charging_profile_purpose=purpose_type
+            )
+        else:
+            logging.error("Unrecognized charging station.")
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unrecognised_charging_station",
+                translation_placeholders={
+                    "charging_station": charging_station,
+                },
+            )
+
+    def get_profile_purpose_type(profile_purpose):
+        if profile_purpose == "tx_default_profile":
+            return ChargingProfilePurposeType.tx_default_profile
+        elif profile_purpose == "tx_profile":
+            return ChargingProfilePurposeType.tx_profile
+
+        return None
 
     csms_config = config.get(DOMAIN)
 
@@ -146,11 +285,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         domain=DOMAIN,
-        service="set_tx_default_profile",
-        service_func=handle_set_tx_default_profile,
+        service="get_charging_profiles",
+        service_func=handle_get_charging_profiles,
+        schema=GET_CHARGING_PROFILES_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        domain=DOMAIN,
+        service="set_charging_profile",
+        service_func=handle_set_charging_profile,
+        schema=SET_CHARGING_PROFILE_SCHEMA,
+    )
+
+    hass.services.async_register(
+        domain=DOMAIN,
+        service="clear_charging_profiles",
+        service_func=handle_clear_charging_profiles,
+        schema=CLEAR_CHARGING_PROFILES_SCHEMA,
     )
 
     hass.async_create_background_task(csms.run_server(), name="CSMS Server Task")
-    logging.info("Created server task.")
+    _LOGGER.debug("Created CSMS server task.")
 
     return True
