@@ -1,18 +1,20 @@
 """A demonstration."""
 
 import asyncio
-from datetime import datetime, timezone
 import logging
 import os
 import ssl
-
+import uuid
+from datetime import datetime, timedelta, timezone
+from dateutil import parser
 from typing import List
 
+import ocpp.v201.enums as occpenuns
 import websockets
-
 from ocpp.messages import Call
 from ocpp.routing import on
-from ocpp.v201 import ChargePoint as cp, call, call_result
+from ocpp.v201 import ChargePoint as cp
+from ocpp.v201 import call, call_result
 from ocpp.v201.call import (
     GetBaseReport,
     GetChargingProfiles,
@@ -29,12 +31,11 @@ from ocpp.v201.datatypes import (
     SetVariableDataType,
     VariableType,
 )
-import ocpp.v201.enums as occpenuns
 from ocpp.v201.enums import (
     Action,
     AlignedDataCtrlrVariableName,
-    ChargingProfilePurposeType,
     ChargingProfileKindType,
+    ChargingProfilePurposeType,
     ChargingRateUnitType,
     ChargingStateVariableName,
     ControllerComponentName,
@@ -44,13 +45,46 @@ from ocpp.v201.enums import (
     RegistrationStatusType,
     ReportBaseType,
     SampledDataCtrlrVariableName,
+    TransactionEventType,
     TxCtrlrVariableName,
     TxStartStopPointType,
 )
 
-
 from .const import DOMAIN
 from .measurand import Measurand, default_measurands
+
+
+class ChargingSession:
+    def __init__(self):
+        self.session_id = str(uuid.uuid4())
+        self.start_time: datetime = None
+        self.last_update: datetime = None
+        self.end_time: datetime = None
+        self.start_energy_registry = None
+        self.energy = 0
+
+    def start_session(self, start_time: datetime, energy_registry_value):
+        self.start_time = start_time
+        self.last_update = start_time
+        self.start_energy_registry = energy_registry_value
+
+    def update_session(self, update_time: datetime, energy_registry_value):
+        self.last_update = update_time
+        if self.start_energy_registry is not None and energy_registry_value is not None:
+            self.energy = energy_registry_value - self.start_energy_registry
+
+    def end_session(self, end_time: datetime, energy_registry_value):
+        self.end_time = end_time
+
+    @property
+    def duration(self) -> timedelta:
+        if self.end_time:
+            return (self.end_time - self.start_time).total_seconds()
+        return (self.last_update - self.start_time).total_seconds()
+
+    @property
+    def cost(self) -> int:
+        return self.energy * 0.2
 
 
 class ChargingStationManager:
@@ -119,6 +153,7 @@ class ChargingStation(cp):
         super().__init__(id, connection)
         self.latest_sampled_values = {}
         self._cs_manager: ChargingStationManager = cs_manager
+        self.current_session = None
 
     async def discover_measurands(self):
         return default_measurands
@@ -160,6 +195,7 @@ class ChargingStation(cp):
                                 measurand=measurand, phase=phase, location=location
                             )
                         ] = value
+
             except KeyError as e:
                 logging.error("Missing expected field in transaction_info: %s", e)
             except TypeError as e:
@@ -168,6 +204,30 @@ class ChargingStation(cp):
             logging.info("Latest sampled values: %s", self.latest_sampled_values)
 
             self._cs_manager.publish_updates()
+
+        energy_register_value = self.latest_sampled_values.get(
+            Measurand.generate_key(
+                measurand="Energy.Active.Import.Register", phase="", location="Outlet"
+            )
+        )
+        t = parser.isoparse(timestamp)
+
+        if event_type == TransactionEventType.started:
+            self.current_session = ChargingSession()
+            self.current_session.start_session(t, energy_register_value)
+        elif event_type == TransactionEventType.updated:
+            if self.current_session is None:
+                self.current_session = ChargingSession()
+                self.current_session.start_session(t, energy_register_value)
+
+                logging.error(
+                    "Transaction event received but not transaction is ongoing."
+                )
+            else:
+                self.current_session.update_session(t, energy_register_value)
+
+        elif event_type == TransactionEventType.ended:
+            self.current_session.end_session(t, energy_register_value)
 
         return call_result.TransactionEventPayload()
 
