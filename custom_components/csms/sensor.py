@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
 from homeassistant.helpers.entity import Entity
+from homeassistant.components.sensor import SensorEntity
 
 from .const import DOMAIN
 from .csms import (
+    ChargingSession,
     ChargingStation,
     ChargingStationManagementSystem,
     ChargingStationManager,
@@ -61,6 +64,59 @@ class ChargingStationSensor(Entity):
         )
 
 
+class CurrentChargingSessionSensor(Entity):
+    """Representation of the current charging session sensor."""
+
+    def __init__(
+        self, charging_station: ChargingStation, cs_manager: ChargingStationManager
+    ):
+        self._charging_station = charging_station
+        self._cs_manager = cs_manager
+        self._attr_name = "Current Charging Session"
+        self._attr_unique_id = "current_charging_session"
+        self._attr_unit_of_measurement = "kWh"
+        self._attr_device_class = "energy"
+
+    @property
+    def state(self):
+        if (
+            not self._cs_manager.charging_station
+            or not self._cs_manager.charging_station.current_session
+        ):
+            return None
+
+        return self._cs_manager.charging_station.current_session.energy
+
+    @property
+    def extra_state_attributes(self):
+        if (
+            not self._cs_manager.charging_station
+            or not self._cs_manager.charging_station.current_session
+        ):
+            return {}
+
+        session: ChargingSession = self._cs_manager.charging_station.current_session
+
+        return {
+            "session_id": session.session_id,
+            "start_time": session.start_time.astimezone(),
+            "duration": str(timedelta(seconds=session.duration)),
+            "cost": session.cost,
+        }
+
+    async def async_added_to_hass(self):
+        """Run when this Entity has been added to HA."""
+        self._cs_manager.register_callback(
+            self._attr_unique_id, self.async_write_ha_state
+        )
+
+    async def async_will_remove_from_hass(self):
+        """Entity being removed from hass."""
+        self._cs_manager.unregister_callback(
+            self._attr_unique_id, self.async_write_ha_state
+        )
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     """Add sensors for passed config_entry in HA."""
     csms: ChargingStationManagementSystem = config_entry.runtime_data
@@ -105,4 +161,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
         for m in measurands
         if m is not None
     ]
+
+    devices.append(
+        CurrentChargingSessionSensor(cs_manager.charging_station, cs_manager)
+    )
+
     async_add_entities(devices, update_before_add=True)
