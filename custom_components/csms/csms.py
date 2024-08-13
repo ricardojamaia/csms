@@ -40,6 +40,7 @@ from ocpp.v201.enums import (
     ChargingStateVariableName,
     ControllerComponentName,
     GenericVariableName,
+    MeasurandType,
     MessageTriggerType,
     RecurrencyKindType,
     RegistrationStatusType,
@@ -74,7 +75,10 @@ class ChargingSession:
             self.energy = energy_registry_value - self.start_energy_registry
 
     def end_session(self, end_time: datetime, energy_registry_value):
+        self.last_update = end_time
         self.end_time = end_time
+        if self.start_energy_registry is not None and energy_registry_value is not None:
+            self.energy = energy_registry_value - self.start_energy_registry
 
     @property
     def duration(self) -> timedelta:
@@ -185,7 +189,7 @@ class ChargingStation(cp):
                         # Value is mandatory
                         value = (
                             sampled_value["value"]
-                            if measurand != "Energy.Active.Import.Register"
+                            if measurand != MeasurandType.energy_active_import_register
                             else int(sampled_value["value"]) / 1000
                         )
 
@@ -336,8 +340,8 @@ class ChargingStationManagementSystem:
     def __init__(self) -> None:
         """Initialize."""
         self.port = 9520
-        self.cert_path = "cert.pem"
-        self.key_path = "key.pem"
+        self.cert_path = "/ssl/cert.pem"
+        self.key_path = "/ssl/key.pem"
         self.charging_station: ChargingStation = None
         self.cs_manager: ChargingStationManager = ChargingStationManager()
         self.hass = None
