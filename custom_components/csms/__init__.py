@@ -20,6 +20,105 @@ type CsmsConfigEntry = ConfigEntry[ChargingStationManagementSystem]
 csms = ChargingStationManagementSystem()
 ha: HomeAssistant
 
+config = [
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "Available"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "true", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "boolean",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "AvailabilityState"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "Available", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "OptionList",
+            "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "SupplyPhases"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "1", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "integer",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "Power"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "0.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "W",
+            "dataType": "decimal",
+            "maxLimit": 27840.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "ACCurrent"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "0.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "A",
+            "dataType": "decimal",
+            "maxLimit": 96.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "ACVoltage"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "235.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "V",
+            "dataType": "decimal",
+            "maxLimit": 230.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "FirmwareVersion"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "01.04.16.00", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "string",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "GridType"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "TN", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "OptionList",
+            "valuesList": "TN,TT,IT",
+            "supportsMonitoring": False,
+        },
+    },
+]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: CsmsConfigEntry) -> bool:
     """Set up OCPP Charging Station Management System from a config entry."""
@@ -37,6 +136,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: CsmsConfigEntry) -> bool
     entry.runtime_data = csms
     csms.port = entry.data["port"]
     csms.hass = hass
+
+    await csms.initialise(config)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

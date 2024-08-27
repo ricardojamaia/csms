@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta
-from homeassistant.helpers.entity import Entity
-from homeassistant.components.sensor import SensorEntity
 
+import uuid
+
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.entity import Entity
+
+from .cs_components import ComponentInstance, VariableInstance
 from .const import DOMAIN
 from .csms import (
     ChargingSession,
@@ -117,6 +121,100 @@ class CurrentChargingSessionSensor(Entity):
         )
 
 
+class ComponentVariableSensor(Entity):
+    """Representation of a Home Assistant sensor for a specific component variable."""
+
+    UNIT_TO_DEVICE_CLASS = {
+        "%": "battery",
+        "W": "power",
+        "Watt": "power",
+        "kW": "power",
+        "Watthours": "energy",
+        "kWh": "energy",
+        "A": "current",
+        "Ampere": "current",
+    }
+
+    def __init__(
+        self,
+        cs_manager: ChargingStationManager,
+        component: ComponentInstance,
+        variable_name: str,
+        instance: str | None = None,
+    ):
+        """Initialize the sensor."""
+        self._cs_manager = cs_manager
+        self._component = component
+        self._variable_name = variable_name
+        self._instance = instance
+        self._name = f"{component.name}_{variable_name}"  # Sensor name
+        self._state = None
+        self._attributes = {}
+
+        self._attr_unique_id = uuid.uuid4()
+
+        # Register a callback to update the state whenever the variable is updated
+        self._component.register_variable_update_callback(self._variable_updated)
+
+    @property
+    def device_info(self):
+        """Return information to link this entity with the correct device."""
+        return self._cs_manager.device_info
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return self._name
+
+    @property
+    def state(self) -> str | None:
+        """Return the current state of the sensor."""
+        return self._state
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return the state attributes."""
+        return self._attributes
+
+    @property
+    def unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement for the sensor."""
+
+        variable = self._component.variables.get((self._variable_name, self._instance))
+        if variable and variable.characteristics:
+            return variable.characteristics.unit
+        return None
+
+    @property
+    def device_class(self) -> str | None:
+        """Return the device class of the sensor."""
+
+        variable = self._component.variables.get((self._variable_name, self._instance))
+        if variable and variable.characteristics:
+            return self.UNIT_TO_DEVICE_CLASS.get(variable.characteristics.unit)
+        return None
+
+    async def _variable_updated(self, variable: VariableInstance):
+        """Update sensor state when a variable is updated."""
+
+        if variable.name == self._variable_name and variable.instance == self._instance:
+            self._state = self._component.get_variable_actual_value(
+                self._variable_name, self._instance
+            )
+            self._attributes = {attr.type: attr.value for attr in variable.attributes}
+            self.async_write_ha_state()
+
+    async def async_update(self):
+        """Fetch new state data for the sensor."""
+        # This method is optional and can be used to refresh the sensor state periodically
+        self._state = self._component.get_variable_actual_value(
+            self._variable_name, self._instance
+        )
+        variable = self._component.variables.get((self._variable_name, self._instance))
+        if variable:
+            self._attributes = {attr.type: attr.value for attr in variable.attributes}
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     """Add sensors for passed config_entry in HA."""
     csms: ChargingStationManagementSystem = config_entry.runtime_data
@@ -149,7 +247,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
         hass.config_entries.async_update_entry(config_entry, data=data)
 
     # Register the create_and_add_devices function as the callback for new measurands
-    cs_manager.new_measurands_callback = create_and_add_devices
+    cs_manager._new_measurands_callback = create_and_add_devices
 
     # Get stored discovered measurands from config_entry and convert them back to Measurand instances
     stored_measurands = config_entry.data.get("discovered_measurands", [])
@@ -165,5 +263,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     devices.append(
         CurrentChargingSessionSensor(cs_manager.charging_station, cs_manager)
     )
+
+    for variable in cs_manager.cs_component.get_variable_names():
+        devices.append(
+            ComponentVariableSensor(cs_manager, cs_manager.cs_component, variable)
+        )
 
     async_add_entities(devices, update_before_add=True)

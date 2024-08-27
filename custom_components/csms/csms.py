@@ -1,27 +1,19 @@
-"""A demonstration."""
+"""Charging Stations Management System."""
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 import ssl
+from typing import Callable, Coroutine
 import uuid
-from datetime import datetime, timedelta, timezone
-from dateutil import parser
-from typing import List
 
-import ocpp.v201.enums as occpenuns
-import websockets
-from ocpp.messages import Call
-from ocpp.routing import on
-from ocpp.v201 import ChargePoint as cp
-from ocpp.v201 import call, call_result
-from ocpp.v201.call import (
-    GetBaseReport,
-    GetChargingProfiles,
-    GetVariables,
-    SetVariables,
-    TriggerMessage,
-)
+from dateutil import parser
+
+from ocpp.routing import create_route_map, on
+
+from ocpp.v201 import ChargePoint as cp, call, call_result
+
 from ocpp.v201.datatypes import (
     ChargingProfileType,
     ChargingSchedulePeriodType,
@@ -37,11 +29,8 @@ from ocpp.v201.enums import (
     ChargingProfileKindType,
     ChargingProfilePurposeType,
     ChargingRateUnitType,
-    ChargingStateVariableName,
     ControllerComponentName,
-    GenericVariableName,
     MeasurandType,
-    MessageTriggerType,
     RecurrencyKindType,
     RegistrationStatusType,
     ReportBaseType,
@@ -50,12 +39,16 @@ from ocpp.v201.enums import (
     TxCtrlrVariableName,
     TxStartStopPointType,
 )
+import websockets
 
 from .const import DOMAIN
+from .cs_components import ChargingStationComponent, EVSEComponent
 from .measurand import Measurand, default_measurands
 
 
 class ChargingSession:
+    """Holds information regsarding a charging session initiated on a Charging Station."""
+
     def __init__(self):
         self.session_id = str(uuid.uuid4())
         self.start_time: datetime = None
@@ -65,16 +58,19 @@ class ChargingSession:
         self.energy = 0
 
     def start_session(self, start_time: datetime, energy_registry_value):
+        """Starts the charging session."""
         self.start_time = start_time
         self.last_update = start_time
         self.start_energy_registry = energy_registry_value
 
     def update_session(self, update_time: datetime, energy_registry_value):
+        """Updates the amount of energy consumed during the charging session."""
         self.last_update = update_time
         if self.start_energy_registry is not None and energy_registry_value is not None:
             self.energy = energy_registry_value - self.start_energy_registry
 
     def end_session(self, end_time: datetime, energy_registry_value):
+        """Ends a charging session."""
         self.last_update = end_time
         self.end_time = end_time
         if self.start_energy_registry is not None and energy_registry_value is not None:
@@ -82,6 +78,7 @@ class ChargingSession:
 
     @property
     def duration(self) -> timedelta:
+        """Returns the amount of energy consumed on the charging session."""
         if self.end_time:
             return (self.end_time - self.start_time).total_seconds()
         return (self.last_update - self.start_time).total_seconds()
@@ -95,8 +92,16 @@ class ChargingStationManager:
     def __init__(self) -> None:
         self.charging_station: ChargingStation = None
         self._callbacks = {}
-        self.new_measurands_callback = None
+        self._new_measurands_callback: Callable[[list[Measurand]], Coroutine[None]] = (
+            None
+        )
         self.id = "DE*BMW*EDAKG4234502990WE"
+
+        self._latest_sampled_values = {}
+        self._pending_reports = []
+        self.current_session = None
+        self.evse_components: dict[int, EVSEComponent] = {}
+        self.cs_component: ChargingStationComponent = ChargingStationComponent()
 
     @property
     def device_info(self):
@@ -112,7 +117,7 @@ class ChargingStationManager:
     def get_latest_measurand_value(self, unique_key):
         """Return the latest value of the specified measurand."""
         if self.charging_station is not None:
-            return self.charging_station.latest_sampled_values.get(
+            return self.charging_station._latest_sampled_values.get(
                 unique_key, "Unavailable"
             )
         return "Unavailable"
@@ -135,34 +140,19 @@ class ChargingStationManager:
             for callback in measurand_callbacks:
                 callback()
 
-    async def initialise(self):
+    async def initialise(self, config):
         # Discover available measurands
-        supported_measurands = await self.charging_station.discover_measurands()
+        supported_measurands = default_measurands
         logging.info(f"Discovered measurands: {supported_measurands}")
 
         # Call the callback to add devices to Home Assistant
-        if self.new_measurands_callback:
-            await self.new_measurands_callback(supported_measurands)
+        if self._new_measurands_callback:
+            await self._new_measurands_callback(supported_measurands)
 
         # Initialize the charging station
-        await self.initialize_charging_station()
+        for item in config:
+            await self.cs_component.update_variable(item)
 
-    async def initialize_charging_station(self):
-        # Example initialization logic
-        pass
-
-
-class ChargingStation(cp):
-    def __init__(self, id, connection, cs_manager: ChargingStationManager):
-        super().__init__(id, connection)
-        self.latest_sampled_values = {}
-        self._cs_manager: ChargingStationManager = cs_manager
-        self.current_session = None
-
-    async def discover_measurands(self):
-        return default_measurands
-
-    @on(Action.TransactionEvent)
     async def on_transaction_event(
         self, event_type, timestamp, trigger_reason, seq_no, transaction_info, **kwargs
     ):
@@ -194,7 +184,7 @@ class ChargingStation(cp):
                         )
 
                         # Update the dictionary with the latest value for each measurand
-                        self.latest_sampled_values[
+                        self._latest_sampled_values[
                             Measurand.generate_key(
                                 measurand=measurand, phase=phase, location=location
                             )
@@ -205,11 +195,11 @@ class ChargingStation(cp):
             except TypeError as e:
                 logging.error("Unexpected data structure in transaction_info: %s", e)
 
-            logging.info("Latest sampled values: %s", self.latest_sampled_values)
+            logging.info("Latest sampled values: %s", self._latest_sampled_values)
 
             self._cs_manager.publish_updates()
 
-        energy_register_value = self.latest_sampled_values.get(
+        energy_register_value = self._latest_sampled_values.get(
             Measurand.generate_key(
                 measurand="Energy.Active.Import.Register", phase="", location="Outlet"
             )
@@ -235,6 +225,31 @@ class ChargingStation(cp):
 
         return call_result.TransactionEventPayload()
 
+    @on(Action.NotifyReport)
+    async def _on_notify_report(
+        self,
+        request_id: int,
+        generated_at: str,
+        seq_no: int,
+        report_data: list,
+        tbc: bool = False,
+        **kwargs,
+    ):
+        logging.info("NotifyReport.")
+        # Store the report data
+        self._pending_reports.extend(report_data)
+
+        if not tbc:
+            # If tbc is False, process all accumulated reports
+            report_data = self._pending_reports
+            self._pending_reports = []  # Reset the storage
+
+            # Update the EVSE component state using the accumulated data
+            for item in report_data:
+                await self.cs_component.update_variable(item)
+
+        return call_result.NotifyReportPayload()
+
     @on(Action.MeterValues)
     async def on_meter_values(self, evse_id, meter_value):
         # Process meter values
@@ -251,24 +266,14 @@ class ChargingStation(cp):
                 except KeyError:
                     logging.info("Key Error")
                 logging.info(
-                    f"Timestamp: {logging.info}, Value: {value}, Context: {context}, Unit: {unit}"
+                    "Timestamp: %s, Value: %s, Context: %s, Unit: %s",
+                    logging.info,
+                    value,
+                    context,
+                    unit,
                 )
 
         return call_result.MeterValues()
-
-    @on(Action.NotifyReport)
-    async def _on_notify_report(
-        self,
-        request_id: int,
-        generated_at: str,
-        seq_no: int,
-        report_data: list,
-        tbc: bool = False,
-        **kwargs,
-    ):
-        logging.info("NotifyReport.")
-
-        return call_result.NotifyReportPayload()
 
     @on(Action.BootNotification)
     async def on_boot_notification(self, charging_station, reason, **kwargs):
@@ -301,6 +306,14 @@ class ChargingStation(cp):
             connector_status,
         )
         return call_result.StatusNotificationPayload()
+
+
+class ChargingStation(cp):
+    def __init__(self, id, connection, cs_manager: ChargingStationManager):
+        super().__init__(id, connection)
+        self._cs_manager: ChargingStationManager = cs_manager
+
+        self.route_map = create_route_map(cs_manager)
 
     async def set_tx_default_profile(self, max_current: int):
         """Send a Smart Charging command to the charging station to set the maximum current."""
@@ -346,6 +359,9 @@ class ChargingStationManagementSystem:
         self.cs_manager: ChargingStationManager = ChargingStationManager()
         self.hass = None
 
+    async def initialise(self, config):
+        await self.cs_manager.initialise(config)
+
     async def run_server(self):
         logging.info("Current dir: %s", os.getcwd())
 
@@ -389,20 +405,11 @@ class ChargingStationManagementSystem:
         logging.info("Charge point %s connected", charge_point_id)
         logging.info("Charger connected")
 
-        await self.cs_manager.initialise()
-        # await self.charging_point.start()
-        # task1 = asyncio.create_task(self.charging_point.start())
-        # task2 = asyncio.create_task(self.set_transaction_events())
-        # task3 = asyncio.create_task(self.request_meter_values())
         await asyncio.gather(
             asyncio.create_task(self.charging_station.start()),
-            asyncio.create_task(self.configure_charging_station()),
+            asyncio.create_task(self.cs_manager.initialise(config)),
             asyncio.create_task(self.request_meter_values()),
         )
-
-        # self.hass.loop.create_task(self.start_charging_point())
-        # asyncio.run_coroutine_threadsafe(self.start_charging_point(), self.hass.loop)
-        # self.hass.async_create_task(self.start_charging_point())
 
     async def configure_charging_station(self):
         logging.info("Setting transaction start ...")

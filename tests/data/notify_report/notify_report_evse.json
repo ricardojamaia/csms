@@ -1,0 +1,80 @@
+{
+  "requestId": 1,
+  "generatedAt": "2024-08-14T16:24:59Z",
+  "seqNo": 0,
+  "reportData": [
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "Available" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "true", "mutability": "ReadOnly" }
+      ],
+      "variableCharacteristics": {
+        "dataType": "boolean",
+        "supportsMonitoring": false
+      }
+    },
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "AvailabilityState" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "Available", "mutability": "ReadOnly" }
+      ],
+      "variableCharacteristics": {
+        "dataType": "OptionList",
+        "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+        "supportsMonitoring": false
+      }
+    },
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "SupplyPhases" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "3", "mutability": "ReadOnly" }
+      ],
+      "variableCharacteristics": {
+        "dataType": "integer",
+        "supportsMonitoring": false
+      }
+    },
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "Power" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "0.000000", "mutability": "ReadOnly" }
+      ],
+      "variableCharacteristics": {
+        "unit": "W",
+        "dataType": "decimal",
+        "maxLimit": 27840.0,
+        "supportsMonitoring": false
+      }
+    },
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "ACVoltage" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "0.000000", "mutability": "ReadWrite" }
+      ],
+      "variableCharacteristics": {
+        "unit": "V",
+        "dataType": "decimal",
+        "maxLimit": 230.0,
+        "supportsMonitoring": false
+      }
+    },
+    {
+      "component": { "name": "EVSE", "evse": { "id": 1 } },
+      "variable": { "name": "ACCurrent" },
+      "variableAttribute": [
+        { "type": "Actual", "value": "0.000000", "mutability": "ReadWrite" }
+      ],
+      "variableCharacteristics": {
+        "unit": "A",
+        "dataType": "decimal",
+        "maxLimit": 96.0,
+        "supportsMonitoring": false
+      }
+    }
+  ]
+}
