@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, fields
 
 from dateutil import parser
 
@@ -9,10 +9,14 @@ class VariableAttribute:
     """Attribute data of a variable."""
 
     type: str | None = None
-    value: any = None
+    value: str = None
     mutability: str | None = None
     persistent: bool | None = None
     constant: bool | None = None
+
+    def to_dict(self):
+        """Convert the VariableAttribute to a dict, excluding attributes with None values."""
+        return {k: v for k, v in self.__dict__.items() if v is not None}
 
 
 @dataclass
@@ -26,6 +30,10 @@ class VariableCharacteristics:
     max_limit: float | None = None
     values_list: str | None = None
 
+    def to_dict(self):
+        """Convert the VariableCharacteristics to a dict, excluding attributes with None values."""
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
 
 @dataclass
 class VariableInstance:
@@ -33,6 +41,16 @@ class VariableInstance:
     instance: str | None
     attributes: list[VariableAttribute] = field(default_factory=list)
     characteristics: VariableCharacteristics | None = None
+
+    def to_dict(self):
+        """Convert the VariableInstance to a dict, excluding 'instance' if it's None."""
+        data = {"name": self.name}
+
+        # Only include 'instance' if it's not None
+        if self.instance is not None:
+            data["instance"] = self.instance
+
+        return data
 
 
 class ComponentInstance:
@@ -88,7 +106,7 @@ class ComponentInstance:
         for attr in variable.attributes:
             if attr.type == attr_type:
                 # Update the existing attribute
-                attr.value = self._convert_value(value, data_type)
+                attr.value = value
                 attr.mutability = mutability
                 attr.persistent = persistent
                 attr.constant = constant
@@ -98,7 +116,7 @@ class ComponentInstance:
             variable.attributes.append(
                 VariableAttribute(
                     type=attr_type,
-                    value=self._convert_value(value, data_type),
+                    value=value,
                     mutability=mutability,
                     persistent=persistent,
                     constant=constant,
@@ -145,9 +163,43 @@ class ComponentInstance:
         if variable is not None:
             for attribute in variable.attributes:
                 if attribute.type == "Actual":
-                    return attribute.value
+                    return self._convert_value(
+                        attribute.value, variable.characteristics.data_type
+                    )
 
         return None
+
+    def set_variable_actual_value(self, name: str, value, instance: str | None = None):
+        variable = self.variables.get((name, instance))
+
+        if variable is not None:
+            for attribute in variable.attributes:
+                if attribute.type == "Actual":
+                    attribute.value = value
+                    return True
+
+        return False
+
+    def to_dict(self) -> dict:
+        """Convert ComponentInstance to a dictionary format using OCPP models."""
+        data = []
+
+        for variable in self.variables.values():
+            entry = {
+                "component": {"name": self.name},
+                "variable": variable.to_dict(),
+                "variable_attribute": [
+                    attribute.to_dict() for attribute in variable.attributes
+                ],
+                "variable_characteristics": variable.characteristics.to_dict(),
+            }
+
+            if self.instance is not None:
+                entry["component"]["instance"] = self.instance
+
+            data.append(entry)
+
+        return data
 
     def register_variable_update_callback(
         self, callback: Callable[[VariableInstance], Awaitable[None]]
@@ -158,6 +210,13 @@ class ComponentInstance:
         """
         if callback not in self._callbacks:
             self._callbacks.append(callback)
+
+    def unregister_variable_update_callback(
+        self, callback: Callable[[VariableInstance], Awaitable[None]]
+    ):
+        """Unegister a callback."""
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
 
 
 class ConnectorComponent(ComponentInstance):
@@ -189,6 +248,26 @@ class ConnectorComponent(ComponentInstance):
                 await self.components[
                     (component_name, component_instance)
                 ].update_variable(data)
+
+    def to_dict(self) -> dict:
+        """Convert ConnectorComponent to a dictionary format using OCPP models."""
+        data = []
+
+        data = super().to_dict()
+        for variable in data:
+            variable["component"]["evse"] = {}
+            variable["component"]["evse"]["id"] = self.evse_id
+            variable["component"]["evse"]["connector_id"] = self.connector_id
+
+        for component in self.components.values():
+            d = component.to_dict()
+            for variable in d:
+                variable["component"]["evse"] = {}
+                variable["component"]["evse"]["id"] = self.evse_id
+                variable["component"]["evse"]["connector_id"] = self.connector_id
+            data += d
+
+        return data
 
 
 class EVSEComponent(ComponentInstance):
@@ -229,12 +308,36 @@ class EVSEComponent(ComponentInstance):
                     (component_name, component_instance)
                 ].update_variable(data)
 
+    def to_dict(self) -> dict:
+        """Convert EVSEComponent to a dictionary format using OCPP models."""
+        data = []
+
+        evse_variables = super().to_dict()
+        for variable in evse_variables:
+            variable["component"]["evse"] = {}
+            variable["component"]["evse"]["id"] = self.evse_id
+
+        data += evse_variables
+
+        for connector in self.connectors.values():
+            connector_variables = connector.to_dict()
+            data += connector_variables
+
+        for component in self.components.values():
+            component_variables = component.to_dict()
+            for variable in component_variables:
+                variable["component"]["evse"] = {}
+                variable["component"]["evse"]["id"] = self.evse_id
+            data += component_variables
+
+        return data
+
 
 class ChargingStationComponent(ComponentInstance):
     def __init__(self) -> None:
         super().__init__("ChargingStation")
 
-        self.evses: dict[tuple[str, str | None], EVSEComponent] = {}
+        self.evses: dict[int, EVSEComponent] = {}
         self.components: dict[tuple[str, str | None], ComponentInstance] = {}
 
     async def update_variable(self, data: dict):
@@ -261,3 +364,17 @@ class ChargingStationComponent(ComponentInstance):
             await self.components[(component_name, component_instance)].update_variable(
                 data
             )
+
+    def to_dict(self) -> dict:
+        """Convert ChargingComponent to a dictionary format using OCPP models."""
+        data = []
+
+        data += super().to_dict()
+
+        for evse in self.evses.values():
+            data += evse.to_dict()
+
+        for component in self.components.values():
+            data += component.to_dict()
+
+        return data

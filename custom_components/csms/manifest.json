@@ -2,13 +2,16 @@
   "domain": "csms",
   "name": "Charging Station Management System",
   "codeowners": ["@ricardojamaia"],
-  "config_flow": true,
+  "config_flow": false,
   "dependencies": [],
   "documentation": "https://www.home-assistant.io/integrations/csms",
   "homekit": {},
   "integration_type": "device",
   "iot_class": "local_push",
-  "requirements": ["ocpp>=1.0.0", "websockets>=12.0"],
+  "requirements": [
+    "websockets>=12.0",
+    "git+https://github.com/ricardojamaia/ocpp@master#ocpp"
+  ],
   "ssdp": [],
   "zeroconf": [],
   "version": "0.0.1"

@@ -1,0 +1,31 @@
+[
+  {
+    "component": {
+      "name": "Connector",
+      "evse": { "id": 1, "connectorId": 1 }
+    },
+    "variable": { "name": "Available" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "true", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "boolean",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": {
+      "name": "Connector",
+      "evse": { "id": 1, "connectorId": 1 }
+    },
+    "variable": { "name": "AvailabilityState" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "Available", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "OptionList",
+      "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+      "supportsMonitoring": false
+    }
+  }
+]

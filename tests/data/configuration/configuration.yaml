@@ -1,0 +1,90 @@
+csms:
+  port: 9521
+  charging_station:
+    - id: DE*BMW*EDAKG4234502990WE
+      measurands:
+        - name: Voltage L1-N
+          measurand: Voltage
+          unit_of_measurement: V
+          device_class: voltage
+          phase: L1-N
+
+        - name: Current L1-N
+          measurand: Current.Import
+          unit_of_measurement: A
+          device_class: current
+          phase: L1-N
+
+        - name: Energy Active Import Register
+          measurand: Energy.Active.Import.Register
+          unit_of_measurement: kWh
+          device_class: energy
+
+        - name: Power Active Import
+          measurand: Power.Active.Import
+          unit_of_measurement: W
+          device_class: power
+
+      variables:
+        - component:
+            name: ChargingStation
+          variable:
+            name: AvailabilityState
+        - component:
+            name: ChargingStation
+          variable:
+            name: FirmwareVersion
+        - component:
+            name: Connector
+            evse:
+              id: 1
+              connector_id: 1
+          variable:
+            name: AvailabilityState
+      charging_profile:
+        - id: 1
+          name: Default charging profile
+          stack_level: 0
+          charging_profile_purpose: TxDefaultProfile
+          charging_profile_kind: Recurring
+          recurrency_kind: Daily
+          charging_schedule:
+            - id: 1
+              start_schedule: 2024-07-29T00:00:00Z
+              duration: 86400
+              charging_rate_unit: A
+              charging_schedule_period:
+                - start_period: 0
+                  limit: 6
+        - id: 10
+          name: Eco Charging (6A)
+          stack_level: 0
+          charging_profile_purpose: TxProfile
+          charging_profile_kind: Recurring
+          recurrency_kind: Daily
+          charging_schedule:
+            - id: 1
+              start_schedule: 2024-07-29T00:00:00Z
+              duration: 86400
+              charging_rate_unit: A
+              charging_schedule_period:
+                - start_period: 0
+                  limit: 0
+                - start_period: 28500
+                  limit: 6
+                - start_period: 68400
+                  limit: 0
+        - id: 11
+          name: Normal Charging (16A)
+          stack_level: 0
+          charging_profile_purpose: TxProfile
+          charging_profile_kind: Recurring
+          recurrency_kind: Daily
+          charging_schedule:
+            - id: 1
+              start_schedule: 2024-07-29T00:00:00Z
+              duration: 86400
+              charging_rate_unit: A
+              charging_schedule_period:
+                - start_period: 0
+                  limit: 16

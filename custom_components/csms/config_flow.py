@@ -20,14 +20,14 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PORT): str,
-        vol.Required("measurands", default=["Voltage", "Current"]): cv.multi_select(
-            {
-                "Voltage": "Voltage",
-                "Current": "Current",
-                "Power.Active.Import": "Power.Active.Import",
-                "Energy.Active.Import.Register": "Energy.Active.Import.Register",
-            }
-        ),
+        # vol.Required("measurands", default=["Voltage", "Current"]): cv.multi_select(
+        #     {
+        #         "Voltage": "Voltage",
+        #         "Current": "Current",
+        #         "Power.Active.Import": "Power.Active.Import",
+        #         "Energy.Active.Import.Register": "Energy.Active.Import.Register",
+        #     }
+        # ),
     }
 )  # vol.Schema({vol.Required(CONF_PORT): str})
 

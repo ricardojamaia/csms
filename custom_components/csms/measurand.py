@@ -1,16 +1,22 @@
+"""Data classes."""
+
 from dataclasses import dataclass, field
 from typing import Optional
 
 
 @dataclass
 class Measurand:
-    name: str  # Human-readable name for Home Assistant
-    measurand: str  # OCPP measurand
+    """Holds information regarding an OCPP Measurand."""
+
+    name: str  # Human-readable name "Voltage L1-N"
+    measurand: str  # OCPP measurand name e.g. "Energy.Active.Import.Register"
     unit_of_measurement: str  # Unit of measurement
     device_class: str  # Device class for the sensor
     phase: Optional[str] = field(default=None)  # OCPP phase
     location: Optional[str] = field(default="Outlet")  # OCPP location
-    unique_key: str = field(init=False)  # Unique key for the sensor, initialized later
+    unique_key: str = field(
+        init=False
+    )  # Unique key for measurand within a Charging Station
 
     def __post_init__(self):
         self.unique_key = self.generate_key(self.measurand, self.phase, self.location)
@@ -108,4 +114,103 @@ default_measurands = [
         unit_of_measurement="W",
         device_class="power",
     ),
+]
+
+default_variables = [
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "Available"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "true", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "boolean",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "AvailabilityState"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "Available", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "OptionList",
+            "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "SupplyPhases"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "1", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "integer",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "Power"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "0.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "W",
+            "dataType": "decimal",
+            "maxLimit": 27840.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "ACCurrent"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "0.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "A",
+            "dataType": "decimal",
+            "maxLimit": 96.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "ACVoltage"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "235.000000", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "unit": "V",
+            "dataType": "decimal",
+            "maxLimit": 230.0,
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "FirmwareVersion"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "01.04.16.00", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "string",
+            "supportsMonitoring": False,
+        },
+    },
+    {
+        "component": {"name": "ChargingStation"},
+        "variable": {"name": "GridType"},
+        "variableAttribute": [
+            {"type": "Actual", "value": "TN", "mutability": "ReadOnly"}
+        ],
+        "variableCharacteristics": {
+            "dataType": "OptionList",
+            "valuesList": "TN,TT,IT",
+            "supportsMonitoring": False,
+        },
+    },
 ]
