@@ -127,9 +127,11 @@ class CurrentChargingSessionSensor(SensorEntity, RestoreEntity):
             start_energy_registry = float(
                 last_state.attributes.get("start_energy_registry")
             )
+            transaction_id = last_state.attributes.get("transaction_id")
+            charging_state = last_state.attributes.get("charging_state")
             if start_time is not None and start_energy_registry is not None:
                 self._cs_manager.current_session = ChargingSession(
-                    start_time, start_energy_registry
+                    start_time, start_energy_registry, transaction_id, charging_state
                 )
 
         # Register the callback
@@ -152,6 +154,8 @@ class CurrentChargingSessionSensor(SensorEntity, RestoreEntity):
             "start_time": session.start_time.astimezone(),
             "start_energy_registry": session.start_energy_registry,
             "duration": str(timedelta(seconds=session.duration)),
+            "charging_state": session.charging_state,
+            "is_active": session.is_active(),
         }
 
         # Update state with the current session energy

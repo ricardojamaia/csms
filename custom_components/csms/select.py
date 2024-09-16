@@ -17,7 +17,6 @@ class ChargingProfileSelector(SelectEntity):
         self._attr_unique_id = f"{self._cs_id}_profile_selector"
         self._attr_options = options
         self._attr_current_option = "Default"
-        self._attr_unique_id = "charging_profile_selector"
 
     @property
     def device_info(self):

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 import os
 import ssl
+import uuid
 
 from dateutil import parser
 from ocpp.routing import create_route_map, on
@@ -24,6 +25,7 @@ from ocpp.v201.enums import (
     ChargingRateUnitType,
     ControllerComponentName,
     MeasurandType,
+    OperationalStatusType,
     RecurrencyKindType,
     RegistrationStatusType,
     SampledDataCtrlrVariableName,
@@ -40,7 +42,13 @@ from .measurand import Measurand
 class ChargingSession:
     """Holds information regsarding a charging session initiated on a Charging Station."""
 
-    def __init__(self, start_time: datetime, energy_registry_value):
+    def __init__(
+        self,
+        start_time: datetime,
+        energy_registry_value,
+        transaction_id: str,
+        charging_state: str | None = None,
+    ):
         """Initialise and start a charging session."""
         self.session_id = str(start_time)
         self.start_time: start_time = start_time
@@ -48,19 +56,39 @@ class ChargingSession:
         self.end_time: datetime = None
         self.start_energy_registry = energy_registry_value
         self.energy = 0
+        self.transaction_id: str = transaction_id
+        self.charging_state: str = charging_state
 
-    def update_session(self, update_time: datetime, energy_registry_value):
+    def update_session(
+        self,
+        update_time: datetime,
+        energy_registry_value,
+        charging_state: str | None = None,
+    ):
         """Update the amount of energy consumed during the charging session."""
         self.last_update = update_time
+        if charging_state is not None:
+            self.charging_state = charging_state
         if self.start_energy_registry is not None and energy_registry_value is not None:
             self.energy = energy_registry_value - self.start_energy_registry
 
-    def end_session(self, end_time: datetime, energy_registry_value):
+    def end_session(
+        self,
+        end_time: datetime,
+        energy_registry_value,
+        charging_state: str | None = None,
+    ):
         """End a charging session."""
         self.last_update = end_time
         self.end_time = end_time
+        if charging_state is not None:
+            self.charging_state = charging_state
         if self.start_energy_registry is not None and energy_registry_value is not None:
             self.energy = energy_registry_value - self.start_energy_registry
+
+    def is_active(self) -> bool:
+        """Return true if charging session is active and fals eotherwise."""
+        return self.end_time is None
 
     @property
     def duration(self) -> timedelta:
@@ -86,9 +114,10 @@ class ChargingStationManager:
         self.sw_version = None
         self._event_queue = asyncio.Queue()
         self.config = {}
-        self.request_id = 1
+        self._request_id = 1
+        self._remote_start_id = 1
         self._charging_profiles: dict[str, ChargingProfileType] = {}
-        self.current_transaction_id = None
+        self._operational_status: OperationalStatusType = None
 
     def get_latest_measurand_value(self, unique_key):
         """Return the latest value of the specified measurand."""
@@ -257,10 +286,10 @@ class ChargingStationManager:
 
             if variables is not None:
                 request_base_report = call.GetReport(
-                    self.request_id,
+                    self._request_id,
                     variables,
                 )
-                self.request_id += 1
+                self._request_id += 1
 
                 try:
                     response = await self.charging_station.call(request_base_report)
@@ -270,13 +299,58 @@ class ChargingStationManager:
 
             await self.set_default_charging_profiles()
 
+    async def start_transaction(self):
+        """Starts a remote transaction."""
+        if self.current_session is not None and self.current_session.is_active():
+            logging.error("Attempt to start transaction but one is already on-going.")
+            return
+
+        request_start_transaction = call.RequestStartTransaction(
+            id_token={"id_token": str(uuid.uuid4()), "type": "Central"},
+            remote_start_id=self._remote_start_id,
+            evse_id=1,
+        )
+        self._remote_start_id += 1
+
+        try:
+            response = await self.charging_station.call(request_start_transaction)
+            logging.debug("RequestStopTransaction response: %s", response)
+        except TimeoutError as e:
+            logging.error("Error stopping transaction: %s", e)
+
+    async def stop_current_transaction(self):
+        """Stop current transaction."""
+        if self.current_session is not None and self.current_session.is_active():
+            await self.stop_transaction(self.current_session.transaction_id)
+
+    async def stop_transaction(self, transaction_id: str):
+        """Stop and ongoing transaction given a transacton Id."""
+
+        if transaction_id is None:
+            return
+
+        request_stop_transaction = call.RequestStopTransaction(transaction_id)
+
+        try:
+            response = await self.charging_station.call(request_stop_transaction)
+            logging.debug("RequestStopTransaction response: %s", response)
+        except TimeoutError as e:
+            logging.error("Error stopping transaction: %s", e)
+
     async def set_current_transaction_charging_profile(self, profile_name: str):
         """Set Charging Profile for the on-going transaction"""
 
-        if self.charging_station is None or self.current_transaction_id is None:
+        if (
+            self.charging_station is None
+            or self.current_session is None
+            or not self.current_session.is_active()
+            or self.current_session.transaction_id is None
+        ):
             return
 
-        await self.set_charging_profile(profile_name, self.current_transaction_id)
+        await self.set_charging_profile(
+            profile_name, self.current_session.transaction_id
+        )
 
     async def set_charging_profile(self, profile_name: str, transaction_id: str = None):
         """Set a charging profile."""
@@ -311,6 +385,7 @@ class ChargingStationManager:
         charging_profile_purpose: ChargingProfilePurposeType | None = None,
         stack_level: int | None = None,
     ):
+        """Clears charging profiles according to criteria."""
         clear_profile_request = call.ClearChargingProfile(
             charging_profile_id=charging_profile_id,
             charging_profile_criteria={
@@ -324,6 +399,35 @@ class ChargingStationManager:
             logging.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
             logging.error("Error setting default charging profile: %s", e)
+
+    async def change_availability(self, operational_status: OperationalStatusType):
+        request_change_availability = call.ChangeAvailability(operational_status)
+
+        try:
+            response = await self.charging_station.call(request_change_availability)
+            logging.debug("SetChargingProfile response: %s", response)
+
+            self._operational_status = operational_status
+        except TimeoutError as e:
+            logging.error("Error changing availability: %s", e)
+
+    def is_operational(self):
+        """Return true if charging station is operational."""
+
+        connectors_availability = [
+            connector.get_variable_actual_value("AvailabilityState")
+            for evse in self.cs_component.evses.values()
+            for connector in evse.connectors.values()
+        ]
+
+        # According to G04.FR.07:
+        # When the availability of the Charging Station becomes Inoperative (Unavailable, Faulted)
+        # All operative EVSEs and connectors (i.e. not Faulted) SHALL become Unavailable.
+        for state in connectors_availability:
+            if state not in ("Unavailable", "Faulted"):
+                return True
+
+        return False
 
     async def set_default_charging_profiles(self):
         """Clear charging station profiles and set all default profiles."""
@@ -354,7 +458,7 @@ class ChargingStationManager:
     async def on_transaction_event(
         self, event_type, timestamp, trigger_reason, seq_no, transaction_info, **kwargs
     ):
-        logging.info(
+        logging.debug(
             "Transaction event received with event_type: %s, timestamp: %s, trigger_reason: %s, seq_no: %s and transaction_info:%s",
             event_type,
             timestamp,
@@ -405,22 +509,36 @@ class ChargingStationManager:
         t = parser.isoparse(timestamp)
 
         if event_type == TransactionEventType.started:
-            self.current_session = ChargingSession(t, energy_register_value)
-            self.current_transaction_id = transaction_info.get("transaction_id")
+            self.current_session = ChargingSession(
+                t,
+                energy_register_value,
+                transaction_info.get("transaction_id"),
+                transaction_info.get("charging_state"),
+            )
         elif event_type == TransactionEventType.updated:
-            self.current_transaction_id = transaction_info.get("transaction_id")
             if self.current_session is None:
-                self.current_session = ChargingSession(t, energy_register_value)
-
+                self.current_session = ChargingSession(
+                    t,
+                    energy_register_value,
+                    transaction_info.get("transaction_id"),
+                    transaction_info.get("charging_state"),
+                )
                 logging.error(
                     "Transaction event received but not transaction is ongoing."
                 )
             else:
-                self.current_session.update_session(t, energy_register_value)
+                if transaction_info.get("transaction_id") is not None:
+                    self.current_session.transaction_id = transaction_info.get(
+                        "transaction_id"
+                    )
+                self.current_session.update_session(
+                    t, energy_register_value, transaction_info.get("charging_state")
+                )
 
         elif event_type == TransactionEventType.ended:
-            self.current_transaction_id = None
-            self.current_session.end_session(t, energy_register_value)
+            self.current_session.end_session(
+                t, energy_register_value, transaction_info.get("charging_state")
+            )
 
         return call_result.TransactionEventPayload()
 

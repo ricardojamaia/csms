@@ -141,6 +141,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     await async_load_platform(hass, Platform.SENSOR, DOMAIN, csms_config, config)
     await async_load_platform(hass, Platform.SELECT, DOMAIN, csms_config, config)
+    await async_load_platform(hass, Platform.BUTTON, DOMAIN, csms_config, config)
 
     hass.services.async_register(
         domain=DOMAIN,
