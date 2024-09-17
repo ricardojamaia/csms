@@ -16,7 +16,6 @@ from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN
 from .csms import ChargingStationManagementSystem, ChargingStationManager
 
-type CsmsConfigEntry = ConfigEntry[ChargingStationManagementSystem]
 
 csms = ChargingStationManagementSystem()
 ha: HomeAssistant
@@ -128,7 +127,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     csms.port = csms_config[CONF_PORT]
     csms.cert_path = csms_config["ssl_cert_path"]
     csms.key_path = csms_config["sss_key_path"]
-    csms.hass = hass
 
     charging_stations = csms_config.get("charging_station", [])
 

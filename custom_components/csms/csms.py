@@ -40,7 +40,7 @@ from .measurand import Measurand
 
 
 class ChargingSession:
-    """Holds information regsarding a charging session initiated on a Charging Station."""
+    """Holds information regarding a charging session initiated on a Charging Station (EVSE)."""
 
     def __init__(
         self,
@@ -48,7 +48,7 @@ class ChargingSession:
         energy_registry_value,
         transaction_id: str,
         charging_state: str | None = None,
-    ):
+    ) -> None:
         """Initialise and start a charging session."""
         self.session_id = str(start_time)
         self.start_time: start_time = start_time
@@ -102,22 +102,32 @@ class ChargingStationManager:
     """Charging station representation on the CSMS side."""
 
     def __init__(self) -> None:
-        self.charging_station: ChargingStation = None
-        self._callbacks = {}
-
-        self._latest_sampled_values = {}
-        self._pending_reports = []
-        self.current_session = None
         self.cs_component: ChargingStationComponent = ChargingStationComponent()
+        self.charging_station: ChargingStation = None
+
+        # Holds information of the ongoing charging session.
+        # TODO: Support several EVSE on the same charging station.
+        self.current_session = None
+
         self.manufacturer = None
         self.model = None
         self.sw_version = None
-        self._event_queue = asyncio.Queue()
+
+        # Configuration information of the Charging Station such as measurands to collect
+        # variable to monitor or charging profiles
         self.config = {}
+
+        self._measurand_callbacks = {}
+        self._latest_sampled_values = {}
+        self._pending_reports = []
+
+        # Queue to defer handling of Charging Station messages to the main loop
+        self._event_queue = asyncio.Queue()
+
         self._request_id = 1
         self._remote_start_id = 1
+
         self._charging_profiles: dict[str, ChargingProfileType] = {}
-        self._operational_status: OperationalStatusType = None
 
     def get_latest_measurand_value(self, unique_key):
         """Return the latest value of the specified measurand."""
@@ -127,20 +137,20 @@ class ChargingStationManager:
 
     def register_callback(self, unique_key, callback):
         """Register a callback to be called when the measurand value changes."""
-        if unique_key not in self._callbacks:
-            self._callbacks[unique_key] = []
-        self._callbacks[unique_key].append(callback)
+        if unique_key not in self._measurand_callbacks:
+            self._measurand_callbacks[unique_key] = []
+        self._measurand_callbacks[unique_key].append(callback)
 
     def unregister_callback(self, unique_key, callback):
         """Unregister a callback."""
-        if unique_key in self._callbacks:
-            self._callbacks[unique_key].remove(callback)
-            if not self._callbacks[unique_key]:
-                del self._callbacks[unique_key]
+        if unique_key in self._measurand_callbacks:
+            self._measurand_callbacks[unique_key].remove(callback)
+            if not self._measurand_callbacks[unique_key]:
+                del self._measurand_callbacks[unique_key]
 
     def publish_updates(self):
         """Publishes measurands whenever they are updated."""
-        for measurand_callbacks in self._callbacks.values():
+        for measurand_callbacks in self._measurand_callbacks.values():
             for callback in measurand_callbacks:
                 callback()
 
@@ -361,13 +371,18 @@ class ChargingStationManager:
         profile = self._charging_profiles.get(profile_name)
 
         if profile is not None:
-            await self.clear_charging_profile(
-                charging_profile_purpose=profile.charging_profile_purpose,
-                stack_level=profile.stack_level,
-            )
+            if (
+                profile.charging_profile_purpose
+                == ChargingProfilePurposeType.tx_profile
+            ):
+                await self.clear_charging_profile(
+                    charging_profile_purpose=profile.charging_profile_purpose,
+                    stack_level=profile.stack_level,
+                )
 
-            if transaction_id is not None:
-                profile.transaction_id = transaction_id
+                if transaction_id is not None:
+                    profile.transaction_id = transaction_id
+
             request_set_profile = call.SetChargingProfile(
                 evse_id=1, charging_profile=profile
             )
@@ -377,6 +392,12 @@ class ChargingStationManager:
                 logging.debug("SetChargingProfile response: %s", response)
             except TimeoutError as e:
                 logging.error("Error setting default charging profile: %s", e)
+
+        # await self.get_charging_profiles(ChargingProfilePurposeType.tx_default_profile)
+        # await self.get_charging_profiles(ChargingProfilePurposeType.tx_profile)
+        # await self.get_charging_profiles(
+        #     ChargingProfilePurposeType.charging_station_max_profile
+        # )
 
     async def clear_charging_profile(
         self,
@@ -407,7 +428,6 @@ class ChargingStationManager:
             response = await self.charging_station.call(request_change_availability)
             logging.debug("SetChargingProfile response: %s", response)
 
-            self._operational_status = operational_status
         except TimeoutError as e:
             logging.error("Error changing availability: %s", e)
 
@@ -429,12 +449,24 @@ class ChargingStationManager:
 
         return False
 
+    async def get_charging_profiles(self, profile_purpose: ChargingProfilePurposeType):
+        get_profiles_request = call.GetChargingProfiles(
+            request_id=self._request_id,
+            charging_profile={"charging_profile_purpose": profile_purpose},
+        )
+        self._request_id += 1
+        try:
+            response = await self.charging_station.call(get_profiles_request)
+            logging.debug("SetChargingProfile response: %s", response)
+        except TimeoutError as e:
+            logging.error("Error setting default charging profile: %s", e)
+
     async def set_default_charging_profiles(self):
         """Clear charging station profiles and set all default profiles."""
 
-        await self.clear_charging_profile(
-            charging_profile_purpose=ChargingProfilePurposeType.tx_default_profile
-        )
+        # await self.clear_charging_profile(
+        #     charging_profile_purpose=ChargingProfilePurposeType.tx_default_profile
+        # )
 
         default_charging_profiles = [
             name
@@ -446,6 +478,13 @@ class ChargingStationManager:
         if default_charging_profiles:
             for name in default_charging_profiles:
                 await self.set_charging_profile(name)
+
+    @on(Action.ReportChargingProfiles)
+    async def on_get_charging_profiles(self, **kwargs):
+        """Handle ReportChargingProfiles."""
+
+        # Send response
+        return call_result.ReportChargingProfiles()
 
     @on(Action.SecurityEventNotification)
     async def on_security_event_notification(self, **kwargs):
@@ -759,12 +798,13 @@ class ChargingStationManagementSystem:
     def __init__(self) -> None:
         """Initialize."""
         self.port = 9520
+        self.host = "0.0.0.0"
         self.cert_path = "/ssl/cert.pem"
         self.key_path = "/ssl/key.pem"
         self.cs_managers: dict[str, ChargingStationManager] = {}
-        self.hass = None
 
-    async def run_server(self):
+    async def run_server(self) -> None:
+        """Run web socket server and wait for Charging Stations connections."""
         logging.info("Current dir: %s", os.getcwd())
 
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -772,7 +812,7 @@ class ChargingStationManagementSystem:
 
         server = await websockets.serve(
             self.on_connect,
-            "0.0.0.0",
+            self.host,
             self.port,
             subprotocols=["ocpp2.0.1"],
             ssl=ssl_context,
@@ -781,16 +821,17 @@ class ChargingStationManagementSystem:
         await server.wait_closed()
 
     async def on_connect(self, websocket, path):
+        """Link the charging point with the corresponding ChargingStationManager upon a new connection."""
         try:
             requested_protocols = websocket.request_headers["Sec-WebSocket-Protocol"]
         except KeyError:
-            logging.info("Client hasn't requested any Subprotocol. Closing Connection")
+            logging.error("Client hasn't requested any Subprotocol. Closing Connection")
             return await websocket.close()
 
         if websocket.subprotocol:
-            logging.info("Protocols Matched: %s", websocket.subprotocol)
+            logging.debug("Protocols Matched: %s", websocket.subprotocol)
         else:
-            logging.warning(
+            logging.error(
                 "Protocols Mismatched | Expected Subprotocols: %s,"
                 " but client supports %s | Closing connection",
                 websocket.available_subprotocols,
@@ -807,7 +848,7 @@ class ChargingStationManagementSystem:
                 charge_point_id, websocket, cs_manager
             )
         else:
-            logging.warning("Unexpected charging point: %s.", charge_point_id)
+            logging.error("Unexpected charging point: %s.", charge_point_id)
             return await websocket.close()
 
         await asyncio.gather(
