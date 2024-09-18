@@ -1,3 +1,5 @@
+"""Implement sensor entities of the CSMS."""
+
 from datetime import timedelta
 
 from dateutil import parser
@@ -85,6 +87,7 @@ class CurrentChargingSessionSensor(SensorEntity, RestoreEntity):
     should_poll = False
 
     def __init__(self, cs_id: str, cs_manager: ChargingStationManager) -> None:
+        """Initialise the sensor entity."""
         self._cs_id = cs_id
         self._cs_manager = cs_manager
         self._attr_name = "Current Charging Session"
@@ -107,10 +110,12 @@ class CurrentChargingSessionSensor(SensorEntity, RestoreEntity):
 
     @property
     def state(self):
+        """Return energy currently consumed by the charging session."""
         return self._state
 
     @property
     def extra_state_attributes(self):
+        """Return extra attributes."""
         return self._attr_extra_state_attributes
 
     async def async_added_to_hass(self):

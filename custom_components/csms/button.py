@@ -1,6 +1,9 @@
+"""Implement button entities of the CSMS."""
+
 from ocpp.v201.enums import OperationalStatusType
 
 from homeassistant.components.button import ButtonEntity
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .csms import ChargingStationManagementSystem, ChargingStationManager
@@ -72,7 +75,10 @@ class ChangeAvailabilityButton(ButtonEntity):
             await self._cs_manager.change_availability(OperationalStatusType.operative)
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+async def async_setup_platform(
+    hass: HomeAssistant, config, async_add_entities, discovery_info=None
+):
+    """Initialise CSMS integration button entities."""
     csms: ChargingStationManagementSystem = hass.data[DOMAIN]
 
     buttons = []

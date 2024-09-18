@@ -106,7 +106,6 @@ class ChargingStationManager:
         self.charging_station: ChargingStation = None
 
         # Holds information of the ongoing charging session.
-        # TODO: Support several EVSE on the same charging station.
         self.current_session = None
 
         self.manufacturer = None
@@ -422,6 +421,7 @@ class ChargingStationManager:
             logging.error("Error setting default charging profile: %s", e)
 
     async def change_availability(self, operational_status: OperationalStatusType):
+        """Change the operational status of the charging station."""
         request_change_availability = call.ChangeAvailability(operational_status)
 
         try:
@@ -450,6 +450,8 @@ class ChargingStationManager:
         return False
 
     async def get_charging_profiles(self, profile_purpose: ChargingProfilePurposeType):
+        """Get charging profiles installed on the charging station."""
+
         get_profiles_request = call.GetChargingProfiles(
             request_id=self._request_id,
             charging_profile={"charging_profile_purpose": profile_purpose},
@@ -480,14 +482,14 @@ class ChargingStationManager:
                 await self.set_charging_profile(name)
 
     @on(Action.ReportChargingProfiles)
-    async def on_get_charging_profiles(self, **kwargs):
+    async def on_get_charging_profiles(self):
         """Handle ReportChargingProfiles."""
 
         # Send response
         return call_result.ReportChargingProfiles()
 
     @on(Action.SecurityEventNotification)
-    async def on_security_event_notification(self, **kwargs):
+    async def on_security_event_notification(self):
         """Handle SecurityEventNotification."""
 
         # Send response (if needed)
@@ -496,9 +498,11 @@ class ChargingStationManager:
     @on(Action.TransactionEvent)
     async def on_transaction_event(
         self, event_type, timestamp, trigger_reason, seq_no, transaction_info, **kwargs
-    ):
+    ) -> call_result.TransactionEventPayload:
+        """Update measurand values and charing session informaiton based on transaction events."""
         logging.debug(
-            "Transaction event received with event_type: %s, timestamp: %s, trigger_reason: %s, seq_no: %s and transaction_info:%s",
+            "Transaction event received with event_type: %s, timestamp: %s, trigger_reason: %s, "
+            + "seq_no: %s and transaction_info:%s",
             event_type,
             timestamp,
             trigger_reason,
@@ -589,9 +593,13 @@ class ChargingStationManager:
         seq_no: int,
         report_data: list,
         tbc: bool = False,
-        **kwargs,
     ):
-        logging.info("NotifyReport.")
+        logging.debug(
+            "NotifyReport: request_id:%s, generated_at:%s, seq_no:%s",
+            request_id,
+            generated_at,
+            seq_no,
+        )
         # Store the report data
         self._pending_reports.extend(report_data)
 
@@ -600,7 +608,7 @@ class ChargingStationManager:
             report_data = self._pending_reports
             self._pending_reports = []  # Reset the storage
 
-            # TODO: Defer update to main loop
+        else:
             # Update the EVSE component state using the accumulated data
             for item in report_data:
                 await self.cs_component.update_variable(item)
@@ -610,7 +618,8 @@ class ChargingStationManager:
         return call_result.NotifyReportPayload()
 
     @on(Action.MeterValues)
-    async def on_meter_values(self, evse_id, meter_value):
+    async def on_meter_values(self, evse_id, meter_value) -> call_result.MeterValues:
+        """Handle MeterValues request."""
         # Process meter values
         for m_value in meter_value:
             timestamp = m_value["timestamp"]
@@ -624,9 +633,10 @@ class ChargingStationManager:
                     unit = sampled_value["unit_of_measure"]["unit"]
                 except KeyError:
                     logging.info("Key Error")
-                logging.info(
-                    "Timestamp: %s, Value: %s, Context: %s, Unit: %s",
-                    logging.info,
+                logging.debug(
+                    "Timestamp: %s, EVSE: %s, Value: %s, Context: %s, Unit: %s",
+                    timestamp,
+                    evse_id,
                     value,
                     context,
                     unit,
@@ -635,7 +645,8 @@ class ChargingStationManager:
         return call_result.MeterValues()
 
     @on(Action.BootNotification)
-    async def on_boot_notification(self, charging_station, reason, **kwargs):
+    async def on_boot_notification(self, charging_station, reason):
+        """Update device informaiton based on BootNotification request."""
         logging.debug(
             "BootNotification received with charging_station: %s, reason: %s",
             charging_station,
@@ -647,24 +658,27 @@ class ChargingStationManager:
         self.sw_version = charging_station.get("firmware_version")
 
         return call_result.BootNotification(
-            current_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z",  # noqa: UP017
+            current_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z",
             interval=10,
             status=RegistrationStatusType.accepted,
         )
 
     @on("Heartbeat")
     def on_heartbeat(self):
+        """Handle heartbeat events sent by the charging station."""
         logging.debug("Received a Heartbeat!")
         return call_result.Heartbeat(
-            current_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z"  # noqa: UP017
+            current_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z"
         )
 
     @on(Action.StatusNotification)
     def on_status_notification(
         self, timestamp, connector_status, evse_id, connector_id
     ):
+        """Updates connectos status upon a StatusNotification event."""
         logging.debug(
-            "Received a StatusNotification: evse: %s, connector_id: %s, and connector_status: %s",
+            "StatusNotification timestamp: %s, evse: %s, connector_id: %s, connector_status: %s",
+            timestamp,
             evse_id,
             connector_id,
             connector_status,
@@ -702,6 +716,7 @@ class ChargingStationManager:
         return call_result.StatusNotificationPayload()
 
     def update_variables(self, get_variables_result):
+        """Updates Charging Stations variables from a GetVariables call result."""
         evse_id = None
         connector = None
 
@@ -741,25 +756,6 @@ class ChargingStationManager:
                     )
                 )
 
-    async def loop(self):
-        """Initialises the charging station and loop handling responses to calls."""
-
-        logging.debug("Starting Charging Station loop task.")
-
-        await self.initialise()
-
-        while True:
-            component, data = await self._event_queue.get()
-            await component.update_variable(data)
-
-
-class ChargingStation(cp):
-    def __init__(self, cs_id, connection, cs_manager: ChargingStationManager):
-        super().__init__(cs_id, connection)
-        self._cs_manager: ChargingStationManager = cs_manager
-
-        self.route_map = create_route_map(cs_manager)
-
     async def set_tx_default_profile(self, max_current: int):
         """Send a Smart Charging command to the charging station to set the maximum current."""
         profile = ChargingProfileType(
@@ -786,10 +782,30 @@ class ChargingStation(cp):
         request = call.SetChargingProfile(evse_id=1, charging_profile=profile)
 
         try:
-            response = await self.call(request)
+            response = await self.charging_station.call(request)
             logging.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
             logging.error("Error setting default charging profile: %s", e)
+
+    async def loop(self):
+        """Initialises the charging station and loop handling responses to calls."""
+
+        logging.debug("Starting Charging Station loop task.")
+
+        await self.initialise()
+
+        while True:
+            component, data = await self._event_queue.get()
+            await component.update_variable(data)
+
+
+class ChargingStation(cp):
+    """Extend the  ChargingPoint to route the events to ChargingStationManager."""
+
+    def __init__(self, cs_id, connection, cs_manager: ChargingStationManager):
+        super().__init__(cs_id, connection)
+
+        self.route_map = create_route_map(cs_manager)
 
 
 class ChargingStationManagementSystem:
@@ -821,7 +837,7 @@ class ChargingStationManagementSystem:
         await server.wait_closed()
 
     async def on_connect(self, websocket, path):
-        """Link the charging point with the corresponding ChargingStationManager upon a new connection."""
+        """Link the charging point with the corresponding ChargingStationManager."""
         try:
             requested_protocols = websocket.request_headers["Sec-WebSocket-Protocol"]
         except KeyError:

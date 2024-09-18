@@ -1,5 +1,7 @@
+"""Implementation of the Device Model"""
+
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field, asdict, fields
+from dataclasses import dataclass, field
 
 from dateutil import parser
 
@@ -37,6 +39,8 @@ class VariableCharacteristics:
 
 @dataclass
 class VariableInstance:
+    """A         Variable instance of the device model."""
+
     name: str
     instance: str | None
     attributes: list[VariableAttribute] = field(default_factory=list)
@@ -54,6 +58,8 @@ class VariableInstance:
 
 
 class ComponentInstance:
+    """A component of the device model."""
+
     def __init__(self, name: str, instance: str | None = None) -> None:
         self.name = name
         self.instance = instance
@@ -61,7 +67,7 @@ class ComponentInstance:
         self._callbacks: list[Callable[[VariableInstance], Awaitable[None]]] = []
 
     async def update_variable(self, data: dict):
-        """Update a given component variable based on the JSON received from the Charging Station."""
+        """Update a given component variable based on the JSON received from the CS."""
 
         component_name = data.get("component", {}).get("name")
         component_instance = data.get("component", {}).get("instance")
@@ -86,15 +92,13 @@ class ComponentInstance:
         # Update or add the attributes
         variable = self.variables[(variable_name, variable_instance)]
         for attribute_json in variable_attributes_json:
-            self._update_or_add_attribute(
-                variable, attribute_json, variable_characteristics_json.get("data_type")
-            )
+            self._update_or_add_attribute(variable, attribute_json)
 
         for callback in self._callbacks:
             await callback(self.variables[(variable_name, variable_instance)])
 
     def _update_or_add_attribute(
-        self, variable: VariableInstance, attribute_json: dict, data_type: str
+        self, variable: VariableInstance, attribute_json: dict
     ):
         """Update an existing attribute or add a new one."""
         attr_type = attribute_json.get("type")
@@ -159,6 +163,7 @@ class ComponentInstance:
         return list({name for name, _ in self.variables})
 
     def get_variable_actual_value(self, name: str, instance: str | None = None):
+        """Return actual value of a component variable."""
         variable = self.variables.get((name, instance))
         if variable is not None:
             for attribute in variable.attributes:
@@ -170,6 +175,7 @@ class ComponentInstance:
         return None
 
     def set_variable_actual_value(self, name: str, value, instance: str | None = None):
+        """Set the actual vlue of a variable."""
         variable = self.variables.get((name, instance))
 
         if variable is not None:
@@ -220,6 +226,8 @@ class ComponentInstance:
 
 
 class ConnectorComponent(ComponentInstance):
+    """A Connector of the Charing Station."""
+
     def __init__(self, evse_id: int, connector_id: int):
         super().__init__(name="Connector")
         self.evse_id: int = evse_id
@@ -227,7 +235,7 @@ class ConnectorComponent(ComponentInstance):
         self.components: dict[tuple[str, str | None], ComponentInstance] = {}
 
     async def update_variable(self, data: dict):
-        """Update a given Connector variable based on the data received from the Charging Station device."""
+        """Update a Connector variable based on the data received from the Charging Station."""
 
         component_name = data.get("component", {}).get("name")
         component_instance = data.get("component", {}).get("instance")
@@ -271,6 +279,8 @@ class ConnectorComponent(ComponentInstance):
 
 
 class EVSEComponent(ComponentInstance):
+    """EVSE of a Charging Station."""
+
     def __init__(self, evse_id: int):
         super().__init__(name="EVSE")
         self.evse_id: int = evse_id
@@ -278,7 +288,7 @@ class EVSEComponent(ComponentInstance):
         self.components: dict[tuple[str, str | None], ComponentInstance] = {}
 
     async def update_variable(self, data: dict):
-        """Update a given EVSE variable based on the data received from the Charging Station device."""
+        """Update a EVSE variable based on the data received from the Charging Station."""
 
         component_name = data.get("component", {}).get("name")
         component_instance = data.get("component", {}).get("instance")
@@ -334,6 +344,8 @@ class EVSEComponent(ComponentInstance):
 
 
 class ChargingStationComponent(ComponentInstance):
+    """Charging Station device model."""
+
     def __init__(self) -> None:
         super().__init__("ChargingStation")
 
@@ -341,7 +353,11 @@ class ChargingStationComponent(ComponentInstance):
         self.components: dict[tuple[str, str | None], ComponentInstance] = {}
 
     async def update_variable(self, data: dict):
-        """Update a given ChargingStation variable based on the data received from the Charging Station device."""
+        """
+        Update a ChargingStation variable based on the data received from the
+        Charging Station.
+
+        """
 
         component_name = data.get("component", {}).get("name")
         component_instance = data.get("component", {}).get("instance")

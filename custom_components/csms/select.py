@@ -1,3 +1,5 @@
+"""Implements select entities of the CSMS integration."""
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -15,6 +17,7 @@ class ChargingProfileSelector(SelectEntity):
         self._cs_id: str = cs_id
         self._cs_manager: ChargingStationManager = cs_manager
         self._attr_unique_id = f"{self._cs_id}_profile_selector"
+        self._attr_name = "Charging Profile"
         self._attr_options = options
         self._attr_current_option = "Default"
 
@@ -35,10 +38,6 @@ class ChargingProfileSelector(SelectEntity):
         self._attr_current_option = option
         await self._cs_manager.set_current_transaction_charging_profile(option)
 
-    @property
-    def name(self):
-        return "Charging Profile"
-
 
 async def async_setup_platform(
     hass: HomeAssistant,
@@ -46,7 +45,7 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Add sensors for passed config_entry in HA."""
+    """Initialise CSMS integration selector entities."""
     csms: ChargingStationManagementSystem = hass.data[DOMAIN]
 
     selectors = []

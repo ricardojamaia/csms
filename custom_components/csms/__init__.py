@@ -6,7 +6,6 @@ import logging
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -111,12 +110,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def handle_set_tx_default_profile(call: ServiceCall):
         max_current = call.data.get("max_current")
+        charging_station = call.get("charging_station")
 
         # # Get the ChargingStationManager instance
-        charging_station = csms.charging_station
+        cs_manager = csms.cs_managers.get(charging_station)
 
         # # Set the maximum current for the charging station using smart charging features
-        await charging_station.set_tx_default_profile(max_current)
+        await cs_manager.set_tx_default_profile(max_current)
 
     csms_config = config.get(DOMAIN)
 
