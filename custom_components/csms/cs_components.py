@@ -1,4 +1,4 @@
-"""Implementation of the Device Model"""
+"""Implementation of the Device Model."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -61,6 +61,7 @@ class ComponentInstance:
     """A component of the device model."""
 
     def __init__(self, name: str, instance: str | None = None) -> None:
+        """Initialise Component Instance."""
         self.name = name
         self.instance = instance
         self.variables: dict[tuple[str, str | None], VariableInstance] = {}
@@ -228,7 +229,9 @@ class ComponentInstance:
 class ConnectorComponent(ComponentInstance):
     """A Connector of the Charing Station."""
 
-    def __init__(self, evse_id: int, connector_id: int):
+    def __init__(self, evse_id: int, connector_id: int) -> None:
+        """Initialise ConnectorComponent."""
+
         super().__init__(name="Connector")
         self.evse_id: int = evse_id
         self.connector_id: int = connector_id
@@ -281,7 +284,9 @@ class ConnectorComponent(ComponentInstance):
 class EVSEComponent(ComponentInstance):
     """EVSE of a Charging Station."""
 
-    def __init__(self, evse_id: int):
+    def __init__(self, evse_id: int) -> None:
+        """Initialise EVSE component."""
+
         super().__init__(name="EVSE")
         self.evse_id: int = evse_id
         self.connectors: dict[int, ConnectorComponent] = {}
@@ -347,17 +352,15 @@ class ChargingStationComponent(ComponentInstance):
     """Charging Station device model."""
 
     def __init__(self) -> None:
+        """Initialise ChargingStationComponent."""
+
         super().__init__("ChargingStation")
 
         self.evses: dict[int, EVSEComponent] = {}
         self.components: dict[tuple[str, str | None], ComponentInstance] = {}
 
     async def update_variable(self, data: dict):
-        """
-        Update a ChargingStation variable based on the data received from the
-        Charging Station.
-
-        """
+        """Update a ChargingStation variable based on the data received from the Charging Station."""
 
         component_name = data.get("component", {}).get("name")
         component_instance = data.get("component", {}).get("instance")

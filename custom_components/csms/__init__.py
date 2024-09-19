@@ -110,13 +110,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def handle_set_tx_default_profile(call: ServiceCall):
         max_current = call.data.get("max_current")
-        charging_station = call.get("charging_station")
+        charging_station = call.data.get("charging_station")
 
         # # Get the ChargingStationManager instance
         cs_manager = csms.cs_managers.get(charging_station)
 
         # # Set the maximum current for the charging station using smart charging features
-        await cs_manager.set_tx_default_profile(max_current)
+        if cs_manager is not None:
+            await cs_manager.set_tx_default_profile(max_current)
+        else:
+            logging.error("Unrecognized charging station.")
 
     csms_config = config.get(DOMAIN)
 

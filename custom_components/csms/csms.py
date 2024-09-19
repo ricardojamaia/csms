@@ -9,7 +9,7 @@ import uuid
 
 from dateutil import parser
 from ocpp.routing import create_route_map, on
-from ocpp.v201 import ChargePoint as cp, call, call_result
+from ocpp.v201 import ChargePoint, call, call_result
 from ocpp.v201.datatypes import (
     ChargingProfileType,
     ChargingSchedulePeriodType,
@@ -103,7 +103,7 @@ class ChargingStationManager:
 
     def __init__(self) -> None:
         self.cs_component: ChargingStationComponent = ChargingStationComponent()
-        self.charging_station: ChargingStation = None
+        self.charge_point: ChargePoint = None
 
         # Holds information of the ongoing charging session.
         self.current_session = None
@@ -130,7 +130,7 @@ class ChargingStationManager:
 
     def get_latest_measurand_value(self, unique_key):
         """Return the latest value of the specified measurand."""
-        if self.charging_station is not None:
+        if self.charge_point is not None:
             return self._latest_sampled_values.get(unique_key, "Unavailable")
         return "Unavailable"
 
@@ -193,7 +193,7 @@ class ChargingStationManager:
         self._parse_charging_profiles()
 
         # Initialize the charging station if it is connected.
-        if self.charging_station is not None:
+        if self.charge_point is not None:
             request_set_tx_ctrlr = call.SetVariables(
                 set_variable_data=[
                     SetVariableDataType(
@@ -204,7 +204,7 @@ class ChargingStationManager:
                 ]
             )
             try:
-                response = await self.charging_station.call(request_set_tx_ctrlr)
+                response = await self.charge_point.call(request_set_tx_ctrlr)
                 logging.debug("Received response: %s", response)
             except TimeoutError as e:
                 logging.error("Error sending payload: %s", e)
@@ -223,7 +223,7 @@ class ChargingStationManager:
                 ]
             )
             try:
-                response = await self.charging_station.call(request_set_tx_interval)
+                response = await self.charge_point.call(request_set_tx_interval)
                 logging.debug("Received response: %s", response)
             except TimeoutError as e:
                 logging.error("Error sending payload: %s", e)
@@ -246,9 +246,7 @@ class ChargingStationManager:
                     ]
                 )
                 try:
-                    response = await self.charging_station.call(
-                        request_set_tx_meassurands
-                    )
+                    response = await self.charge_point.call(request_set_tx_meassurands)
                     logging.debug("Received response: %s", response)
                 except TimeoutError as e:
                     logging.error("Error sending payload: %s", e)
@@ -265,9 +263,7 @@ class ChargingStationManager:
                     ]
                 )
                 try:
-                    response = await self.charging_station.call(
-                        request_set_tx_meassurands
-                    )
+                    response = await self.charge_point.call(request_set_tx_meassurands)
                     logging.debug("Received response: %s", response)
                 except TimeoutError as e:
                     logging.error("Error sending payload: %s", e)
@@ -284,9 +280,7 @@ class ChargingStationManager:
                     ]
                 )
                 try:
-                    response = await self.charging_station.call(
-                        request_set_tx_meassurands
-                    )
+                    response = await self.charge_point.call(request_set_tx_meassurands)
                     logging.debug("Received response: %s", response)
                 except TimeoutError as e:
                     logging.error("Error sending payload: %s", e)
@@ -301,12 +295,13 @@ class ChargingStationManager:
                 self._request_id += 1
 
                 try:
-                    response = await self.charging_station.call(request_base_report)
+                    response = await self.charge_point.call(request_base_report)
                     logging.debug("Received response: %s", response)
                 except TimeoutError as e:
                     logging.error("Error sending payload: %s", e)
 
-            await self.set_default_charging_profiles()
+            # await self.set_default_charging_profiles()
+            # await self.set_tx_default_profile(max_current=6)
 
     async def start_transaction(self):
         """Starts a remote transaction."""
@@ -322,7 +317,7 @@ class ChargingStationManager:
         self._remote_start_id += 1
 
         try:
-            response = await self.charging_station.call(request_start_transaction)
+            response = await self.charge_point.call(request_start_transaction)
             logging.debug("RequestStopTransaction response: %s", response)
         except TimeoutError as e:
             logging.error("Error stopping transaction: %s", e)
@@ -341,7 +336,7 @@ class ChargingStationManager:
         request_stop_transaction = call.RequestStopTransaction(transaction_id)
 
         try:
-            response = await self.charging_station.call(request_stop_transaction)
+            response = await self.charge_point.call(request_stop_transaction)
             logging.debug("RequestStopTransaction response: %s", response)
         except TimeoutError as e:
             logging.error("Error stopping transaction: %s", e)
@@ -350,7 +345,7 @@ class ChargingStationManager:
         """Set Charging Profile for the on-going transaction"""
 
         if (
-            self.charging_station is None
+            self.charge_point is None
             or self.current_session is None
             or not self.current_session.is_active()
             or self.current_session.transaction_id is None
@@ -364,7 +359,7 @@ class ChargingStationManager:
     async def set_charging_profile(self, profile_name: str, transaction_id: str = None):
         """Set a charging profile."""
 
-        if self.charging_station is None:
+        if self.charge_point is None:
             return
 
         profile = self._charging_profiles.get(profile_name)
@@ -387,7 +382,7 @@ class ChargingStationManager:
             )
 
             try:
-                response = await self.charging_station.call(request_set_profile)
+                response = await self.charge_point.call(request_set_profile)
                 logging.debug("SetChargingProfile response: %s", response)
             except TimeoutError as e:
                 logging.error("Error setting default charging profile: %s", e)
@@ -415,7 +410,7 @@ class ChargingStationManager:
             },
         )
         try:
-            response = await self.charging_station.call(clear_profile_request)
+            response = await self.charge_point.call(clear_profile_request)
             logging.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
             logging.error("Error setting default charging profile: %s", e)
@@ -425,7 +420,7 @@ class ChargingStationManager:
         request_change_availability = call.ChangeAvailability(operational_status)
 
         try:
-            response = await self.charging_station.call(request_change_availability)
+            response = await self.charge_point.call(request_change_availability)
             logging.debug("SetChargingProfile response: %s", response)
 
         except TimeoutError as e:
@@ -458,7 +453,7 @@ class ChargingStationManager:
         )
         self._request_id += 1
         try:
-            response = await self.charging_station.call(get_profiles_request)
+            response = await self.charge_point.call(get_profiles_request)
             logging.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
             logging.error("Error setting default charging profile: %s", e)
@@ -466,9 +461,11 @@ class ChargingStationManager:
     async def set_default_charging_profiles(self):
         """Clear charging station profiles and set all default profiles."""
 
-        # await self.clear_charging_profile(
-        #     charging_profile_purpose=ChargingProfilePurposeType.tx_default_profile
-        # )
+        await self.clear_charging_profile(
+            charging_profile_purpose=ChargingProfilePurposeType.tx_default_profile
+        )
+
+        await self.get_charging_profiles(ChargingProfilePurposeType.tx_default_profile)
 
         default_charging_profiles = [
             name
@@ -608,12 +605,9 @@ class ChargingStationManager:
             report_data = self._pending_reports
             self._pending_reports = []  # Reset the storage
 
-        else:
             # Update the EVSE component state using the accumulated data
             for item in report_data:
                 await self.cs_component.update_variable(item)
-
-            # await self._new_charging_station_callback()
 
         return call_result.NotifyReportPayload()
 
@@ -782,7 +776,7 @@ class ChargingStationManager:
         request = call.SetChargingProfile(evse_id=1, charging_profile=profile)
 
         try:
-            response = await self.charging_station.call(request)
+            response = await self.charge_point.call(request)
             logging.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
             logging.error("Error setting default charging profile: %s", e)
@@ -797,15 +791,6 @@ class ChargingStationManager:
         while True:
             component, data = await self._event_queue.get()
             await component.update_variable(data)
-
-
-class ChargingStation(cp):
-    """Extend the  ChargingPoint to route the events to ChargingStationManager."""
-
-    def __init__(self, cs_id, connection, cs_manager: ChargingStationManager):
-        super().__init__(cs_id, connection)
-
-        self.route_map = create_route_map(cs_manager)
 
 
 class ChargingStationManagementSystem:
@@ -860,14 +845,13 @@ class ChargingStationManagementSystem:
         cs_manager = self.cs_managers.get(charge_point_id)
         if cs_manager is not None:
             logging.info("Charge point %s connected", charge_point_id)
-            cs_manager.charging_station = ChargingStation(
-                charge_point_id, websocket, cs_manager
-            )
+            cs_manager.charge_point = ChargePoint(charge_point_id, websocket)
+            cs_manager.charge_point.route_map = create_route_map(cs_manager)
         else:
-            logging.error("Unexpected charging point: %s.", charge_point_id)
+            logging.error("Unexpected charge point: %s.", charge_point_id)
             return await websocket.close()
 
         await asyncio.gather(
-            asyncio.create_task(cs_manager.charging_station.start()),
+            asyncio.create_task(cs_manager.charge_point.start()),
             asyncio.create_task(cs_manager.loop()),
         )

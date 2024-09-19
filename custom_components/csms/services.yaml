@@ -1,6 +1,12 @@
 set_tx_default_profile:
   description: "Set the maximum current for an ongoing or future transaction."
   fields:
+    charging_station:
+      description: "The ID of the charging station."
+      example: "DE*BMW*EDAKG8468367490WE"
+      required: true
+      selector:
+        text:
     max_current:
       description: "The maximum current to set in amperes."
       example: 16
