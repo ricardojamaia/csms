@@ -4,10 +4,11 @@
   "codeowners": ["@ricardojamaia"],
   "config_flow": false,
   "dependencies": [],
-  "documentation": "https://www.home-assistant.io/integrations/csms",
+  "documentation": "https://github.com/ricardojamaia/csms/",
   "homekit": {},
   "integration_type": "device",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/ricardojamaia/csms/issues",
   "requirements": [
     "websockets>=12.0",
     "git+https://github.com/ricardojamaia/ocpp@master#ocpp"
