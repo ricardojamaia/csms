@@ -1,0 +1,206 @@
+[
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "Available" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "true", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "boolean",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "AvailabilityState" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "Available", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "OptionList",
+      "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "SupplyPhases" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "1", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "Power" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "0.000000", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "unit": "W",
+      "dataType": "decimal",
+      "maxLimit": 27840.0,
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "ACCurrent" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "0.000000", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "unit": "A",
+      "dataType": "decimal",
+      "maxLimit": 96.0,
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "ACVoltage" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "235.000000", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "unit": "V",
+      "dataType": "decimal",
+      "maxLimit": 230.0,
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "GridType" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "TN", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "OptionList",
+      "valuesList": "TN,TT,IT",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "MaxCurrent" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "32", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "unit": "Ampere",
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "ChargingStation" },
+    "variable": { "name": "Country" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "PT", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "OptionList",
+      "valuesList": "AD,AE,AF,AG,AI,AL,AM,AO,AQ,AR,AS,AT,AU,AW,AX,AZ,BA,BB,BD,BE,BF,BG,BH,BI,BJ,BL,BM,BN,BO,BQ,BR,BS,BT,BV,BW,BY,BZ,CA,CC,CD,CF,CG,CH,CI,CK,CL,CM,CN,CO,CR,CU,CV,CW,CX,CY,CZ,DE,DJ,DK,DM,DO,DZ,EC,EE,EG,EH,ER,ES,ET,FI,FJ,FK,FM,FO,FR,GA,GB,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GR,GS,GT,GU,GW,GY,HK,HM,HN,HR,HT,HU,ID,IE,IL,IM,IN,IO,IQ,IR,IS,IT,JE,JM,JO,JP,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LT,LU,LV,LY,MA,MC,MD,ME,MF,MG,MH,MK,ML,MM,MN,MO,MP,MQ,MR,MS,MT,MU,MV,MW,MX,MY,MZ,NA,NC,NE,NF,NG,NI,NL,NO,NP,NR,NU,NZ,OM,PA,PE,PF,PG,PH,PK,PL,PM,PN,PR,PS,PT,PW,PY,QA,RE,RO,RS,RU,RW,SA,SB,SC,SD,SE,SG,SH,SI,SJ,SK,SL,SM,SN,SO,SR,SS,ST,SV,SX,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TR,TT,TV,TW,TZ,UA,UG,UM,US,UY,UZ,VA,VC,VE,VG,VI,VN,VU,WF,WS,YE,YT,ZA,ZM,ZW",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "EVSE", "evse": { "id": 1 } },
+    "variable": { "name": "Available" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "true", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "boolean",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "EVSE", "evse": { "id": 1 } },
+    "variable": { "name": "AvailabilityState" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "Available", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "OptionList",
+      "valuesList": "Available,Occupied,Reserved,Unavailable,Faulted",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "EVSE", "evse": { "id": 1 } },
+    "variable": { "name": "SupplyPhases" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "3", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "EVSE", "evse": { "id": 1 } },
+    "variable": { "name": "Power" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "0.000000", "mutability": "ReadOnly" }
+    ],
+    "variableCharacteristics": {
+      "unit": "W",
+      "dataType": "decimal",
+      "maxLimit": 27840.0,
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "OCPPCommCtrlr" },
+    "variable": { "name": "NetworkProfileConnectionAttempts" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "3", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "OCPPCommCtrlr" },
+    "variable": { "name": "QueueAllMessages" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "true", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "boolean",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "OCPPCommCtrlr" },
+    "variable": { "name": "MessageAttempts", "instance": "TransactionEvent" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "3", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "OCPPCommCtrlr" },
+    "variable": {
+      "name": "MessageAttemptInterval",
+      "instance": "TransactionEvent"
+    },
+    "variableAttribute": [
+      { "type": "Actual", "value": "60", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "unit": "seconds",
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  }
+]

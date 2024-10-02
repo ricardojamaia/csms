@@ -1,0 +1,74 @@
+[
+  {
+    "component": { "name": "SampledDataCtrlr" },
+    "variable": { "name": "TxEndedMeasurands" },
+    "variableAttribute": [
+      {
+        "type": "Actual",
+        "value": "Energy.Active.Import.Register",
+        "mutability": "ReadWrite"
+      }
+    ],
+    "variableCharacteristics": {
+      "dataType": "MemberList",
+      "valuesList": "Current.Import,Energy.Active.Import.Register,Power.Active.Import,Voltage",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "SampledDataCtrlr" },
+    "variable": { "name": "TxEndedInterval" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "0", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "unit": "seconds",
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "SampledDataCtrlr" },
+    "variable": { "name": "TxStartedMeasurands" },
+    "variableAttribute": [
+      {
+        "type": "Actual",
+        "value": "Energy.Active.Import.Register",
+        "mutability": "ReadWrite"
+      }
+    ],
+    "variableCharacteristics": {
+      "dataType": "MemberList",
+      "valuesList": "Current.Import,Energy.Active.Import.Register,Power.Active.Import,Voltage",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "SampledDataCtrlr" },
+    "variable": { "name": "TxUpdatedMeasurands" },
+    "variableAttribute": [
+      {
+        "type": "Actual",
+        "value": "Current.Import,Energy.Active.Import.Register,Power.Active.Import,Voltage",
+        "mutability": "ReadWrite"
+      }
+    ],
+    "variableCharacteristics": {
+      "dataType": "MemberList",
+      "valuesList": "Current.Import,Energy.Active.Import.Register,Power.Active.Import,Voltage",
+      "supportsMonitoring": false
+    }
+  },
+  {
+    "component": { "name": "SampledDataCtrlr" },
+    "variable": { "name": "TxUpdatedInterval" },
+    "variableAttribute": [
+      { "type": "Actual", "value": "60", "mutability": "ReadWrite" }
+    ],
+    "variableCharacteristics": {
+      "unit": "seconds",
+      "dataType": "integer",
+      "supportsMonitoring": false
+    }
+  }
+]

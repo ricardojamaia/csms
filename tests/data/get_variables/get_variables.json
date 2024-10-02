@@ -1,0 +1,90 @@
+[
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "0.000000",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "ACCurrent"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "0.000000",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "Power"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "Available",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "AvailabilityState"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "235.000000",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "ACVoltage"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "true",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "Available"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "01.04.16.00",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "FirmwareVersion"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "TN",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "GridType"
+    }
+  },
+  {
+    "attributeStatus": "Accepted",
+    "attributeType": "Actual",
+    "attributeValue": "1",
+    "component": {
+      "name": "ChargingStation"
+    },
+    "variable": {
+      "name": "SupplyPhases"
+    }
+  }
+]
