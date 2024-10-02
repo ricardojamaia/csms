@@ -11,6 +11,15 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+from dateutil import parser
+
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+
 from .const import DOMAIN
 from .cs_components import ComponentInstance, VariableInstance
 from .csms import (
@@ -200,11 +209,11 @@ class ComponentVariableSensor(Entity):
         self._component = component
         self._variable_name = variable_name
         self._instance = instance
-        self._name = f"{component.name}_{variable_name}"  # Sensor name
+        self._name = f"{component.name} {variable_name}{" " + self._instance if self._instance is not None else ""}"
         self._state = None
         self._attributes = {}
 
-        self._attr_unique_id = f"{self._cs_id}_{component.name}_{variable_name}"
+        self._attr_unique_id = f"{self._cs_id}_{component.name}_{variable_name}{"_" + self._instance if self._instance is not None else ""}"
 
     @property
     def device_info(self):
@@ -318,23 +327,50 @@ async def async_setup_platform(
                 sensors.extend(
                     [
                         ComponentVariableSensor(
-                            cs_id, cs_manager, cs_manager.cs_component, variable
+                            cs_id,
+                            cs_manager,
+                            cs_manager.cs_component,
+                            variable_name,
+                            variable_instance,
                         )
-                        for variable in cs_manager.cs_component.get_variable_names()
+                        for variable_name, variable_instance in cs_manager.cs_component.variables
                     ]
                 )
                 sensors.extend(
                     [
-                        ComponentVariableSensor(cs_id, cs_manager, component, variable)
+                        ComponentVariableSensor(
+                            cs_id,
+                            cs_manager,
+                            component,
+                            variable_name,
+                            variable_instance,
+                        )
                         for component in cs_manager.cs_component.components.values()
-                        for variable in component.get_variable_names()
+                        for variable_name, variable_instance in component.variables
                     ]
                 )
                 sensors.extend(
                     [
-                        ComponentVariableSensor(cs_id, cs_manager, evse, variable)
+                        ComponentVariableSensor(
+                            cs_id, cs_manager, evse, variable_name, variable_instance
+                        )
                         for evse in cs_manager.cs_component.evses.values()
-                        for variable in evse.get_variable_names()
+                        for variable_name, variable_instance in evse.variables
+                    ]
+                )
+
+                sensors.extend(
+                    [
+                        ComponentVariableSensor(
+                            cs_id,
+                            cs_manager,
+                            connector,
+                            variable_name,
+                            variable_instance,
+                        )
+                        for evse in cs_manager.cs_component.evses.values()
+                        for connector in evse.connectors.values()
+                        for variable_name, variable_instance in connector.variables
                     ]
                 )
 

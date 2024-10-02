@@ -34,12 +34,13 @@ class StartStopTransactionButton(ButtonEntity):
     async def async_press(self):
         """Handle the button press."""
 
-        if self._cs_manager.current_transaction_id is None:
+        if (
+            self._cs_manager.current_session is None
+            or not self._cs_manager.current_session.is_active()
+        ):
             await self._cs_manager.start_transaction()
         else:
-            await self._cs_manager.stop_transaction(
-                self._cs_manager.current_transaction_id
-            )
+            await self._cs_manager.stop_current_transaction()
 
 
 class ChangeAvailabilityButton(ButtonEntity):

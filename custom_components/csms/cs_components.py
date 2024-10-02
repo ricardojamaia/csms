@@ -159,10 +159,6 @@ class ComponentInstance:
         # Default to returning the value as a string
         return str(value)
 
-    def get_variable_names(self) -> list[str]:
-        """Return a list of unique variable names known to this component."""
-        return list({name for name, _ in self.variables})
-
     def get_variable_actual_value(self, name: str, instance: str | None = None):
         """Return actual value of a component variable."""
         variable = self.variables.get((name, instance))
