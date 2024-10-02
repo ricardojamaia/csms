@@ -11,12 +11,14 @@ from dateutil import parser
 from ocpp.routing import create_route_map, on
 from ocpp.v201 import ChargePoint, call, call_result
 
+
 from ocpp.v201.datatypes import (
     ChargingProfileType,
     ChargingSchedulePeriodType,
     ChargingScheduleType,
     ComponentType,
     SetMonitoringDataType,
+    SetVariableDataType,
     VariableType,
 )
 from ocpp.v201.enums import (
@@ -24,15 +26,20 @@ from ocpp.v201.enums import (
     ChargingProfileKindType,
     ChargingProfilePurposeType,
     ChargingRateUnitType,
+    ControllerComponentName,
     MeasurandType,
     MonitorType,
     OperationalStatusType,
     RecurrencyKindType,
     RegistrationStatusType,
+    SampledDataCtrlrVariableName,
     TransactionEventType,
+    TxCtrlrVariableName,
+    TxStartStopPointType,
 )
 import websockets
 
+from .const import _LOGGER
 from .cs_components import ChargingStationComponent, ConnectorComponent, EVSEComponent
 from .measurand import Measurand
 
@@ -207,161 +214,155 @@ class ChargingStationManager:
 
         # Initialize the charging station if it is connected.
         if self.charge_point is not None:
-            # request_set_tx_ctrlr = call.SetVariables(
-            #     set_variable_data=[
-            #         SetVariableDataType(
-            #             component=ComponentType(name=ControllerComponentName.tx_ctrlr),
-            #             variable=VariableType(name=TxCtrlrVariableName.tx_start_point),
-            #             attribute_value=TxStartStopPointType.ev_connected,
-            #         )
-            #     ]
-            # )
-            # try:
-            #     response = await self.charge_point.call(request_set_tx_ctrlr)
-            #     logging.debug("Received response: %s", response)
-            # except TimeoutError as e:
-            #     logging.error("Error sending payload: %s", e)
-
-            # request_set_tx_interval = call.SetVariables(
-            #     set_variable_data=[
-            #         SetVariableDataType(
-            #             component=ComponentType(
-            #                 name=ControllerComponentName.sampled_data_ctrlr
-            #             ),
-            #             variable=VariableType(
-            #                 name=SampledDataCtrlrVariableName.tx_updated_interval
-            #             ),
-            #             attribute_value="60",
-            #         )
-            #     ]
-            # )
-            # try:
-            #     response = await self.charge_point.call(request_set_tx_interval)
-            #     logging.debug("Received response: %s", response)
-            # except TimeoutError as e:
-            #     logging.error("Error sending payload: %s", e)
-
-            # measurands = self.config.get("measurands")
-            # if measurands is not None:
-            #     measurand_names = [m.get("measurand") for m in measurands]
-            #     sample_data_ctrlr = ComponentType(
-            #         name=ControllerComponentName.sampled_data_ctrlr
-            #     )
-            #     request_set_tx_meassurands = call.SetVariables(
-            #         set_variable_data=[
-            #             SetVariableDataType(
-            #                 component=sample_data_ctrlr,
-            #                 variable=VariableType(
-            #                     name=SampledDataCtrlrVariableName.tx_started_measurands
-            #                 ),
-            #                 attribute_value=",".join(measurand_names),
-            #             )
-            #         ]
-            #     )
-            #     try:
-            #         response = await self.charge_point.call(request_set_tx_meassurands)
-            #         logging.debug("Received response: %s", response)
-            #     except TimeoutError as e:
-            #         logging.error("Error sending payload: %s", e)
-
-            #     request_set_tx_meassurands = call.SetVariables(
-            #         set_variable_data=[
-            #             SetVariableDataType(
-            #                 component=sample_data_ctrlr,
-            #                 variable=VariableType(
-            #                     name=SampledDataCtrlrVariableName.tx_updated_measurands
-            #                 ),
-            #                 attribute_value=",".join(measurand_names),
-            #             )
-            #         ]
-            #     )
-            #     try:
-            #         response = await self.charge_point.call(request_set_tx_meassurands)
-            #         logging.debug("Received response: %s", response)
-            #     except TimeoutError as e:
-            #         logging.error("Error sending payload: %s", e)
-
-            #     request_set_tx_meassurands = call.SetVariables(
-            #         set_variable_data=[
-            #             SetVariableDataType(
-            #                 component=sample_data_ctrlr,
-            #                 variable=VariableType(
-            #                     name=SampledDataCtrlrVariableName.tx_ended_measurands
-            #                 ),
-            #                 attribute_value=",".join(measurand_names),
-            #             )
-            #         ]
-            #     )
-            #     try:
-            #         response = await self.charge_point.call(request_set_tx_meassurands)
-            #         logging.debug("Received response: %s", response)
-            #     except TimeoutError as e:
-            #         logging.error("Error sending payload: %s", e)
+            await self.setup_tx_variables()
 
             variables = self.config.get("variables")
 
             if variables is not None:
-                request_base_report = call.GetReport(
-                    self._request_id.next(),
-                    (
-                        [
-                            {
-                                "component": {
-                                    "name": variable["component"]["name"],
-                                    "instance": variable["component"].get("instance"),
-                                    "evse": {
-                                        "id": variable["component"]["evse"].get("id"),
-                                        "connector_id": variable["component"][
-                                            "evse"
-                                        ].get("connector_id"),
-                                    }
-                                    if variable["component"].get("evse") is not None
-                                    else None,
-                                },
-                                "variable": {
-                                    "name": variable["variable"]["name"],
-                                    "instance": variable["variable"].get("instance"),
-                                },
-                            }
-                            for variable in variables
-                        ]
-                    ),
-                )
+                await self.get_variables(variables)
 
-                try:
-                    response = await self.charge_point.call(request_base_report)
-                    logging.debug("Received response: %s", response)
-                except TimeoutError as e:
-                    logging.error("Error sending payload: %s", e)
+                await self.set_variables_monitoring(variables)
 
-                request_set_variable_monitoring = call.SetVariableMonitoring(
-                    [
-                        SetMonitoringDataType(
-                            value=variable["monitoring"]["value"],
-                            type=variable["monitoring"]["type"],
-                            component=ComponentType(
-                                name=variable["component"]["name"],
-                                instance=variable["component"].get("instance"),
-                                evse=variable["component"].get("evse"),
-                            ),
-                            variable=VariableType(
-                                name=variable["variable"]["name"],
-                                instance=variable["variable"].get("instance"),
-                            ),
-                            severity=2,
-                            transaction=False,
-                        )
-                        for variable in variables
-                    ]
-                )
-                await self.charge_point.call(request_set_variable_monitoring)
-
-            # await self.set_default_charging_profiles()
-            # await self.get_full_report()
-            # await self.set_tx_default_profile(max_current=6)
             await self.charge_point.call(
                 call.GetMonitoringReport(self._request_id.next())
             )
+
+    async def set_variables_monitoring(self, variables):
+        request_set_variable_monitoring = call.SetVariableMonitoring(
+            [
+                SetMonitoringDataType(
+                    value=variable["monitoring"]["value"],
+                    type=variable["monitoring"]["type"],
+                    component=ComponentType(
+                        name=variable["component"]["name"],
+                        instance=variable["component"].get("instance"),
+                        evse=variable["component"].get("evse"),
+                    ),
+                    variable=VariableType(
+                        name=variable["variable"]["name"],
+                        instance=variable["variable"].get("instance"),
+                    ),
+                    severity=2,
+                    transaction=False,
+                )
+                for variable in variables
+            ]
+        )
+        response = await self.charge_point.call(request_set_variable_monitoring)
+        _LOGGER.debug("Received response: %s", response)
+
+    async def get_variables(self, variables):
+        """Sends a GetVariables request to the charging station."""
+        request_base_report = call.GetReport(
+            self._request_id.next(),
+            (
+                [
+                    {
+                        "component": {
+                            "name": variable["component"]["name"],
+                            "instance": variable["component"].get("instance"),
+                            "evse": {
+                                "id": variable["component"]["evse"].get("id"),
+                                "connector_id": variable["component"]["evse"].get(
+                                    "connector_id"
+                                ),
+                            }
+                            if variable["component"].get("evse") is not None
+                            else None,
+                        },
+                        "variable": {
+                            "name": variable["variable"]["name"],
+                            "instance": variable["variable"].get("instance"),
+                        },
+                    }
+                    for variable in variables
+                ]
+            ),
+        )
+
+        response = await self.charge_point.call(request_base_report)
+        _LOGGER.debug("Received response: %s", response)
+
+    async def setup_tx_variables(self):
+        """Initialises charging station transaction related variables."""
+        request_set_tx_ctrlr = call.SetVariables(
+            set_variable_data=[
+                SetVariableDataType(
+                    component=ComponentType(name=ControllerComponentName.tx_ctrlr),
+                    variable=VariableType(name=TxCtrlrVariableName.tx_start_point),
+                    attribute_value=TxStartStopPointType.ev_connected,
+                )
+            ]
+        )
+        response = await self.charge_point.call(request_set_tx_ctrlr)
+        _LOGGER.debug("Received response: %s", response)
+
+        request_set_tx_interval = call.SetVariables(
+            set_variable_data=[
+                SetVariableDataType(
+                    component=ComponentType(
+                        name=ControllerComponentName.sampled_data_ctrlr
+                    ),
+                    variable=VariableType(
+                        name=SampledDataCtrlrVariableName.tx_updated_interval
+                    ),
+                    attribute_value="60",
+                )
+            ]
+        )
+
+        response = await self.charge_point.call(request_set_tx_interval)
+        _LOGGER.debug("Received response: %s", response)
+
+        measurands = self.config.get("measurands")
+        if measurands is not None:
+            measurand_names = [m.get("measurand") for m in measurands]
+            sample_data_ctrlr = ComponentType(
+                name=ControllerComponentName.sampled_data_ctrlr
+            )
+            request_set_tx_meassurands = call.SetVariables(
+                set_variable_data=[
+                    SetVariableDataType(
+                        component=sample_data_ctrlr,
+                        variable=VariableType(
+                            name=SampledDataCtrlrVariableName.tx_started_measurands
+                        ),
+                        attribute_value=",".join(measurand_names),
+                    )
+                ]
+            )
+            response = await self.charge_point.call(request_set_tx_meassurands)
+            _LOGGER.debug("Received response: %s", response)
+
+            request_set_tx_meassurands = call.SetVariables(
+                set_variable_data=[
+                    SetVariableDataType(
+                        component=sample_data_ctrlr,
+                        variable=VariableType(
+                            name=SampledDataCtrlrVariableName.tx_updated_measurands
+                        ),
+                        attribute_value=",".join(measurand_names),
+                    )
+                ]
+            )
+
+            response = await self.charge_point.call(request_set_tx_meassurands)
+            _LOGGER.debug("Received response: %s", response)
+
+            request_set_tx_meassurands = call.SetVariables(
+                set_variable_data=[
+                    SetVariableDataType(
+                        component=sample_data_ctrlr,
+                        variable=VariableType(
+                            name=SampledDataCtrlrVariableName.tx_ended_measurands
+                        ),
+                        attribute_value=",".join(measurand_names),
+                    )
+                ]
+            )
+
+            response = await self.charge_point.call(request_set_tx_meassurands)
+            _LOGGER.debug("Received response: %s", response)
 
     async def get_full_report(self):
         request_base_report = call.GetBaseReport(
@@ -370,14 +371,14 @@ class ChargingStationManager:
 
         try:
             response = await self.charge_point.call(request_base_report)
-            logging.debug("Received response: %s", response)
+            _LOGGER.debug("Received response: %s", response)
         except TimeoutError as e:
-            logging.error("Error sending payload: %s", e)
+            _LOGGER.error("Error sending payload: %s", e)
 
     async def start_transaction(self):
         """Starts a remote transaction."""
         if self.current_session is not None and self.current_session.is_active():
-            logging.error("Attempt to start transaction but one is already on-going.")
+            _LOGGER.error("Attempt to start transaction but one is already on-going.")
             return
 
         request_start_transaction = call.RequestStartTransaction(
@@ -389,9 +390,9 @@ class ChargingStationManager:
 
         try:
             response = await self.charge_point.call(request_start_transaction)
-            logging.debug("RequestStopTransaction response: %s", response)
+            _LOGGER.debug("RequestStopTransaction response: %s", response)
         except TimeoutError as e:
-            logging.error("Error stopping transaction: %s", e)
+            _LOGGER.error("Error stopping transaction: %s", e)
 
     async def stop_current_transaction(self):
         """Stop current transaction."""
@@ -408,9 +409,9 @@ class ChargingStationManager:
 
         try:
             response = await self.charge_point.call(request_stop_transaction)
-            logging.debug("RequestStopTransaction response: %s", response)
+            _LOGGER.debug("RequestStopTransaction response: %s", response)
         except TimeoutError as e:
-            logging.error("Error stopping transaction: %s", e)
+            _LOGGER.error("Error stopping transaction: %s", e)
 
     async def set_current_transaction_charging_profile(self, profile_name: str):
         """Set Charging Profile for the on-going transaction"""
@@ -463,7 +464,7 @@ class ChargingStationManager:
         )
 
         response = await self.charge_point.call(request_set_profile)
-        logging.debug("SetChargingProfile response: %s", response)
+        _LOGGER.debug("SetChargingProfile response: %s", response)
 
     async def clear_charging_profile(
         self,
@@ -483,9 +484,9 @@ class ChargingStationManager:
         )
         try:
             response = await self.charge_point.call(clear_profile_request)
-            logging.debug("SetChargingProfile response: %s", response)
+            _LOGGER.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
-            logging.error("Error setting default charging profile: %s", e)
+            _LOGGER.error("Error setting default charging profile: %s", e)
 
     async def change_availability(self, operational_status: OperationalStatusType):
         """Change the operational status of the charging station."""
@@ -493,10 +494,10 @@ class ChargingStationManager:
 
         try:
             response = await self.charge_point.call(request_change_availability)
-            logging.debug("SetChargingProfile response: %s", response)
+            _LOGGER.debug("SetChargingProfile response: %s", response)
 
         except TimeoutError as e:
-            logging.error("Error changing availability: %s", e)
+            _LOGGER.error("Error changing availability: %s", e)
 
     def is_connected(self):
         """Return true if charging station is connected."""
@@ -539,9 +540,9 @@ class ChargingStationManager:
         response: call_result.GetChargingProfiles
         try:
             response = await self.charge_point.call(get_profiles_request)
-            logging.debug("SetChargingProfile response: %s", response)
+            _LOGGER.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
-            logging.error("Error setting default charging profile: %s", e)
+            _LOGGER.error("Error setting default charging profile: %s", e)
 
         profiles = []
         if response.status == "Accepted":
@@ -617,7 +618,7 @@ class ChargingStationManager:
         self, event_type, timestamp, trigger_reason, seq_no, transaction_info, **kwargs
     ) -> call_result.TransactionEvent:
         """Update measurand values and charing session informaiton based on transaction events."""
-        logging.debug(
+        _LOGGER.debug(
             "Transaction event received with event_type: %s, timestamp: %s, trigger_reason: %s, "
             "seq_no: %s and transaction_info:%s",
             event_type,
@@ -653,11 +654,11 @@ class ChargingStationManager:
                         ] = value
 
             except KeyError as e:
-                logging.error("Missing expected field in transaction_info: %s", e)
+                _LOGGER.error("Missing expected field in transaction_info: %s", e)
             except TypeError as e:
-                logging.error("Unexpected data structure in transaction_info: %s", e)
+                _LOGGER.error("Unexpected data structure in transaction_info: %s", e)
 
-            logging.info("Latest sampled values: %s", self._latest_sampled_values)
+            _LOGGER.debug("Latest sampled values: %s", self._latest_sampled_values)
 
             self.publish_updates()
 
@@ -683,7 +684,7 @@ class ChargingStationManager:
                     transaction_info.get("transaction_id"),
                     transaction_info.get("charging_state"),
                 )
-                logging.error(
+                _LOGGER.error(
                     "Transaction event received but not transaction is ongoing."
                 )
             else:
@@ -711,7 +712,7 @@ class ChargingStationManager:
         report_data: list,
         tbc: bool = False,
     ):
-        logging.debug(
+        _LOGGER.debug(
             "NotifyReport: request_id:%s, generated_at:%s, seq_no:%s",
             request_id,
             generated_at,
@@ -785,8 +786,8 @@ class ChargingStationManager:
                     context = sampled_value["context"]
                     unit = sampled_value["unit_of_measure"]["unit"]
                 except KeyError:
-                    logging.info("Key Error")
-                logging.debug(
+                    _LOGGER.debug("Key Error")
+                _LOGGER.debug(
                     "Timestamp: %s, EVSE: %s, Value: %s, Context: %s, Unit: %s",
                     timestamp,
                     evse_id,
@@ -800,7 +801,7 @@ class ChargingStationManager:
     @on(Action.BootNotification)
     async def on_boot_notification(self, charging_station, reason):
         """Update device informaiton based on BootNotification request."""
-        logging.debug(
+        _LOGGER.debug(
             "BootNotification received with charging_station: %s, reason: %s",
             charging_station,
             reason,
@@ -819,7 +820,7 @@ class ChargingStationManager:
     @on("Heartbeat")
     def on_heartbeat(self):
         """Handle heartbeat events sent by the charging station."""
-        logging.debug("Received a Heartbeat!")
+        _LOGGER.debug("Received a Heartbeat!")
         return call_result.Heartbeat(
             current_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z"
         )
@@ -829,7 +830,7 @@ class ChargingStationManager:
         self, timestamp, connector_status, evse_id, connector_id
     ):
         """Updates connectos status upon a StatusNotification event."""
-        logging.debug(
+        _LOGGER.debug(
             "StatusNotification timestamp: %s, evse: %s, connector_id: %s, connector_status: %s",
             timestamp,
             evse_id,
@@ -888,7 +889,7 @@ class ChargingStationManager:
                     evse_id = evse["id"]
                     connector = evse.get("connector")
             except KeyError as key_error:
-                logging.error("Error getting variables: %s", key_error)
+                _LOGGER.error("Error getting variables: %s", key_error)
                 return
 
             if attribute_status == "Accepted":
@@ -938,14 +939,14 @@ class ChargingStationManager:
 
         try:
             response = await self.charge_point.call(request)
-            logging.debug("SetChargingProfile response: %s", response)
+            _LOGGER.debug("SetChargingProfile response: %s", response)
         except TimeoutError as e:
-            logging.error("Error setting default charging profile: %s", e)
+            _LOGGER.error("Error setting default charging profile: %s", e)
 
     async def loop(self):
         """Initialises the charging station and loop handling responses to calls."""
 
-        logging.debug("Starting Charging Station loop task.")
+        _LOGGER.debug("Starting Charging Station loop task.")
 
         await self.initialise()
 
@@ -967,7 +968,7 @@ class ChargingStationManagementSystem:
 
     async def run_server(self) -> None:
         """Run web socket server and wait for Charging Stations connections."""
-        logging.info("Current dir: %s", os.getcwd())
+        _LOGGER.info("Current dir: %s", os.getcwd())
 
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(certfile=self.cert_path, keyfile=self.key_path)
@@ -979,7 +980,7 @@ class ChargingStationManagementSystem:
             subprotocols=["ocpp2.0.1"],
             ssl=ssl_context,
         )
-        logging.info("WebSocket Server Started")
+        _LOGGER.info("WebSocket Server Started")
         await server.wait_closed()
 
     async def on_connect(self, websocket, path):
@@ -987,13 +988,13 @@ class ChargingStationManagementSystem:
         try:
             requested_protocols = websocket.request_headers["Sec-WebSocket-Protocol"]
         except KeyError:
-            logging.error("Client hasn't requested any Subprotocol. Closing Connection")
+            _LOGGER.error("Client hasn't requested any Subprotocol. Closing Connection")
             return await websocket.close()
 
         if websocket.subprotocol:
-            logging.debug("Protocols Matched: %s", websocket.subprotocol)
+            _LOGGER.debug("Protocols Matched: %s", websocket.subprotocol)
         else:
-            logging.error(
+            _LOGGER.error(
                 "Protocols Mismatched | Expected Subprotocols: %s,"
                 " but client supports %s | Closing connection",
                 websocket.available_subprotocols,
@@ -1005,11 +1006,11 @@ class ChargingStationManagementSystem:
 
         cs_manager = self.cs_managers.get(charge_point_id)
         if cs_manager is not None:
-            logging.info("Charge point %s connected", charge_point_id)
+            _LOGGER.info("Charge point %s connected", charge_point_id)
             cs_manager.charge_point = ChargePoint(charge_point_id, websocket)
             cs_manager.charge_point.route_map = create_route_map(cs_manager)
         else:
-            logging.error("Unexpected charge point: %s.", charge_point_id)
+            _LOGGER.error("Unexpected charge point: %s.", charge_point_id)
             return await websocket.close()
 
         await asyncio.gather(

@@ -16,7 +16,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
+from .const import DOMAIN, _LOGGER
 from .csms import ChargingStationManagementSystem, ChargingStationManager
 
 csms = ChargingStationManagementSystem()
@@ -144,6 +144,8 @@ CLEAR_CHARGING_PROFILES_SCHEMA = vol.Schema(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration from YAML."""
 
+    _LOGGER.debug("Starting CSMS setup.")
+
     async def handle_get_charging_profiles(call: ServiceCall):
         profile_purpose = call.data.get("profile_purpose")
         charging_station = call.data.get("charging_station")
@@ -252,11 +254,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     def get_profile_purpose_type(profile_purpose):
         if profile_purpose == "tx_default_profile":
-            purpose_type = ChargingProfilePurposeType.tx_default_profile
+            return ChargingProfilePurposeType.tx_default_profile
         elif profile_purpose == "tx_profile":
-            purpose_type = ChargingProfilePurposeType.tx_profile
+            return ChargingProfilePurposeType.tx_profile
 
-        return purpose_type
+        return None
 
     csms_config = config.get(DOMAIN)
 
@@ -304,6 +306,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     hass.async_create_background_task(csms.run_server(), name="CSMS Server Task")
-    logging.info("Created server task.")
+    _LOGGER.debug("Created CSMS server task.")
 
     return True
