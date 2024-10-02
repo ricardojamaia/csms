@@ -2,7 +2,6 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-import logging
 import os
 import ssl
 import uuid
@@ -28,7 +27,6 @@ from ocpp.v201.enums import (
     ChargingRateUnitType,
     ControllerComponentName,
     MeasurandType,
-    MonitorType,
     OperationalStatusType,
     RecurrencyKindType,
     RegistrationStatusType,
